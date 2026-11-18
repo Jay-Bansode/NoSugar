@@ -5,7 +5,7 @@
 - **Brand name:** TBD (use `brand` / `Brand` as placeholders in code)
 - **Market:** India only (INR, GST, Hindi/English users, UPI-first, Cash on Delivery)
 - **Last updated:** 2026-11-19
-- **Current phase:** Phase 0 – Foundations (update this line as work progresses)
+- **Current phase:** Phase 0 – Foundations: monorepo + CI done; accounts, GST/FSSAI and Figma design system pending (update this line as work progresses)
 
 ---
 
@@ -15,12 +15,12 @@ A direct-to-consumer store selling flavoured coffee premix sachets (zero added s
 
 Four clients, one API:
 
-| Client | Tech | Users |
-| --- | --- | --- |
-| Website | Next.js | Shoppers |
-| Android app | React Native (Expo) | Shoppers |
-| iOS app | React Native (Expo) | Shoppers |
-| Admin panel | Next.js | Owner, operations, support staff |
+| Client      | Tech                | Users                            |
+| ----------- | ------------------- | -------------------------------- |
+| Website     | Next.js             | Shoppers                         |
+| Android app | React Native (Expo) | Shoppers                         |
+| iOS app     | React Native (Expo) | Shoppers                         |
+| Admin panel | Next.js             | Owner, operations, support staff |
 
 Only three kinds of outside services: **Razorpay** (payments), **Shiprocket** (shipping, tracking, COD collection) and **messaging** (SMS/WhatsApp OTP and alerts, push, email).
 
@@ -69,29 +69,29 @@ Admin (Next.js) ───┘            │   ▲
 
 ## 3. Tech stack
 
-| Layer | Choice |
-| --- | --- |
-| Language | TypeScript everywhere (strict mode) |
-| Monorepo | pnpm workspaces + Turborepo |
-| API | NestJS (Node.js LTS) |
-| Database | PostgreSQL + Prisma ORM |
-| Cache / queues | Redis + BullMQ |
-| Validation | Zod schemas in `packages/shared`, reused by API and clients |
-| Website | Next.js (App Router) + Tailwind CSS |
-| Admin | Next.js (App Router) + Tailwind + shadcn/ui |
-| Mobile | React Native with Expo (development builds, EAS Build, EAS Update). **Not Expo Go** – the Razorpay SDK needs native code via `expo prebuild`. |
-| Mobile data | TanStack Query; secure storage via `expo-secure-store` |
-| Web payments | Razorpay Standard Checkout (checkout.js) |
-| App payments | `react-native-razorpay` |
-| Shipping | Shiprocket REST API (`apiv2.shiprocket.in`) + tracking webhooks |
-| Auth | Phone OTP → JWT access token (short-lived) + rotating refresh token |
-| Media | S3-compatible storage + CDN |
-| Push | Firebase Cloud Messaging (APNs underneath on iOS) |
-| Email | Amazon SES or Resend |
-| Observability | Sentry (all apps), structured JSON logs (pino), uptime checks |
-| Analytics | GA4 or PostHog; Meta Pixel + server-side Conversions API on web |
-| Hosting | AWS Mumbai (ap-south-1) or another India-region host; Docker |
-| Testing | Vitest/Jest (unit), Supertest (API e2e), Playwright (web), Maestro or Detox (mobile) |
+| Layer          | Choice                                                                                                                                        |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Language       | TypeScript everywhere (strict mode)                                                                                                           |
+| Monorepo       | pnpm workspaces + Turborepo                                                                                                                   |
+| API            | NestJS (Node.js LTS)                                                                                                                          |
+| Database       | PostgreSQL + Prisma ORM                                                                                                                       |
+| Cache / queues | Redis + BullMQ                                                                                                                                |
+| Validation     | Zod schemas in `packages/shared`, reused by API and clients                                                                                   |
+| Website        | Next.js (App Router) + Tailwind CSS                                                                                                           |
+| Admin          | Next.js (App Router) + Tailwind + shadcn/ui                                                                                                   |
+| Mobile         | React Native with Expo (development builds, EAS Build, EAS Update). **Not Expo Go** – the Razorpay SDK needs native code via `expo prebuild`. |
+| Mobile data    | TanStack Query; secure storage via `expo-secure-store`                                                                                        |
+| Web payments   | Razorpay Standard Checkout (checkout.js)                                                                                                      |
+| App payments   | `react-native-razorpay`                                                                                                                       |
+| Shipping       | Shiprocket REST API (`apiv2.shiprocket.in`) + tracking webhooks                                                                               |
+| Auth           | Phone OTP → JWT access token (short-lived) + rotating refresh token                                                                           |
+| Media          | S3-compatible storage + CDN                                                                                                                   |
+| Push           | Firebase Cloud Messaging (APNs underneath on iOS)                                                                                             |
+| Email          | Amazon SES or Resend                                                                                                                          |
+| Observability  | Sentry (all apps), structured JSON logs (pino), uptime checks                                                                                 |
+| Analytics      | GA4 or PostHog; Meta Pixel + server-side Conversions API on web                                                                               |
+| Hosting        | AWS Mumbai (ap-south-1) or another India-region host; Docker                                                                                  |
+| Testing        | Vitest (unit; SWC plugin in the API for decorators), Supertest (API e2e), Playwright (web), Maestro or Detox (mobile)                         |
 
 ---
 
@@ -109,7 +109,8 @@ Admin (Next.js) ───┘            │   ▲
 │   ├── api-client/   # Typed fetch client used by web, admin, mobile
 │   ├── ui-tokens/    # Colours, spacing, typography tokens
 │   └── config/       # Shared ESLint, TS and Prettier config
-├── infra/            # Docker, IaC, CI workflows
+├── infra/            # Docker Compose (local Postgres + Redis), IaC
+├── .github/          # CI workflows (GitHub only reads this folder), Dependabot
 ├── docs/             # ADRs, runbooks, this file
 └── PROJECT_CONTEXT.md
 ```
@@ -124,19 +125,19 @@ Each module: `*.module.ts`, `*.controller.ts`, `*.service.ts`, `dto/`, `*.spec.t
 
 ## 5. Data model (PostgreSQL)
 
-| Domain | Tables |
-| --- | --- |
-| Customers | `users`, `addresses`, `sessions`, `devices` |
-| Catalog | `products`, `variants`, `product_media`, `collections`, `collection_items`, `bundles`, `bundle_items` |
-| Pricing | `discounts`, `discount_redemptions` |
-| Cart | `carts`, `cart_items` |
-| Orders | `orders`, `order_items`, `order_events` |
-| Payments | `payments`, `refunds` |
-| Fulfilment | `shipments`, `shipment_events` |
-| Tax | `invoices`, `credit_notes`, `invoice_series` |
-| Trial & wallet | `trial_claims`, `wallet_ledger` |
-| Engagement | `reviews`, `review_media`, `leads`, `notifications` |
-| Platform | `admin_users`, `roles`, `audit_log`, `webhook_events`, `settings` |
+| Domain         | Tables                                                                                                |
+| -------------- | ----------------------------------------------------------------------------------------------------- |
+| Customers      | `users`, `addresses`, `sessions`, `devices`                                                           |
+| Catalog        | `products`, `variants`, `product_media`, `collections`, `collection_items`, `bundles`, `bundle_items` |
+| Pricing        | `discounts`, `discount_redemptions`                                                                   |
+| Cart           | `carts`, `cart_items`                                                                                 |
+| Orders         | `orders`, `order_items`, `order_events`                                                               |
+| Payments       | `payments`, `refunds`                                                                                 |
+| Fulfilment     | `shipments`, `shipment_events`                                                                        |
+| Tax            | `invoices`, `credit_notes`, `invoice_series`                                                          |
+| Trial & wallet | `trial_claims`, `wallet_ledger`                                                                       |
+| Engagement     | `reviews`, `review_media`, `leads`, `notifications`                                                   |
+| Platform       | `admin_users`, `roles`, `audit_log`, `webhook_events`, `settings`                                     |
 
 Key fields:
 
@@ -150,6 +151,7 @@ Key fields:
 ### State machines
 
 **Order status**
+
 ```
 pending_payment → confirmed → packed → shipped → out_for_delivery → delivered
 pending_payment → payment_failed | cancelled (timeout)
@@ -159,6 +161,7 @@ delivered → refunded (full) | partially_refunded
 ```
 
 **Trial claim status**
+
 ```
 ordered → delivered → credited → (used | refunded | expired)
 ordered → cancelled (failed delivery / RTO / order cancelled)
@@ -213,30 +216,30 @@ Every transition writes a row to `order_events` (or the equivalent events table)
 
 ### Main customer endpoints (initial)
 
-| Method & path | Purpose |
-| --- | --- |
-| `POST /v1/auth/otp` · `POST /v1/auth/verify` · `POST /v1/auth/refresh` · `POST /v1/auth/logout` | Login |
-| `GET /v1/products` · `GET /v1/products/:slug` · `GET /v1/collections/:slug` | Catalog |
-| `GET/POST/PATCH/DELETE /v1/cart` and `/v1/cart/items` | Cart |
-| `GET /v1/serviceability?pincode=` | Delivery check |
-| `POST /v1/checkout` | Create order + Razorpay order |
-| `POST /v1/payments/verify` | Verify Razorpay signature |
-| `GET /v1/orders` · `GET /v1/orders/:number` · `POST /v1/orders/:number/cancel` | Orders |
-| `GET /v1/orders/:number/invoice` | Invoice PDF |
-| `GET /v1/wallet` | Balance, expiry, ledger |
-| `POST /v1/trial/refund-request` | 48-hour trial refund |
-| `POST /v1/reviews` | Submit review (verified buyers) |
-| `POST /v1/leads` | Notify-me form |
-| `POST /v1/devices` | Register push token |
-| `GET /v1/config` | Banners, countdown end dates, min app version, fees |
-| `DELETE /v1/me` | Delete account |
+| Method & path                                                                                   | Purpose                                             |
+| ----------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `POST /v1/auth/otp` · `POST /v1/auth/verify` · `POST /v1/auth/refresh` · `POST /v1/auth/logout` | Login                                               |
+| `GET /v1/products` · `GET /v1/products/:slug` · `GET /v1/collections/:slug`                     | Catalog                                             |
+| `GET/POST/PATCH/DELETE /v1/cart` and `/v1/cart/items`                                           | Cart                                                |
+| `GET /v1/serviceability?pincode=`                                                               | Delivery check                                      |
+| `POST /v1/checkout`                                                                             | Create order + Razorpay order                       |
+| `POST /v1/payments/verify`                                                                      | Verify Razorpay signature                           |
+| `GET /v1/orders` · `GET /v1/orders/:number` · `POST /v1/orders/:number/cancel`                  | Orders                                              |
+| `GET /v1/orders/:number/invoice`                                                                | Invoice PDF                                         |
+| `GET /v1/wallet`                                                                                | Balance, expiry, ledger                             |
+| `POST /v1/trial/refund-request`                                                                 | 48-hour trial refund                                |
+| `POST /v1/reviews`                                                                              | Submit review (verified buyers)                     |
+| `POST /v1/leads`                                                                                | Notify-me form                                      |
+| `POST /v1/devices`                                                                              | Register push token                                 |
+| `GET /v1/config`                                                                                | Banners, countdown end dates, min app version, fees |
+| `DELETE /v1/me`                                                                                 | Delete account                                      |
 
 ### Webhooks received
 
-| Path | Events |
-| --- | --- |
-| `POST /v1/webhooks/razorpay` | `payment.captured`, `payment.failed`, `refund.processed` |
-| `POST /v1/webhooks/shiprocket` | Tracking status updates (Delivered, NDR, RTO, etc.) |
+| Path                           | Events                                                   |
+| ------------------------------ | -------------------------------------------------------- |
+| `POST /v1/webhooks/razorpay`   | `payment.captured`, `payment.failed`, `refund.processed` |
+| `POST /v1/webhooks/shiprocket` | Tracking status updates (Delivered, NDR, RTO, etc.)      |
 
 Rules: verify signature/token → store in `webhook_events` (unique on external id) → return 200 fast → process in a queue job. Never process the same event twice.
 
@@ -332,16 +335,16 @@ Mobile (`apps/mobile`) uses only public values: `EXPO_PUBLIC_API_URL`, `EXPO_PUB
 
 ## 10. Roadmap (one developer ≈ 24 weeks; three developers ≈ 12–14 weeks)
 
-| Phase | Weeks | Goal |
-| --- | --- | --- |
-| 0. Foundations | 1 | Accounts (Razorpay, Shiprocket, AWS, Apple, Google Play, Firebase, SMS/WhatsApp), GST/FSSAI, monorepo + CI, design system in Figma |
-| 1. Core API | 2–6 | Schema, OTP auth, catalog, pricing + GST, cart, serviceability, orders, Razorpay + COD, invoices, tests |
-| 2. Admin panel | 5–8 | Admin auth + 2FA, products, orders, refunds, discounts, content, reviews, audit log |
-| 3. Fulfilment, wallet, notifications | 7–9 | Shiprocket integration, tracking webhooks, NDR/RTO, trial claims, wallet ledger + jobs, refunds, message templates |
-| 4. Website | 8–12 | Storefront pages, cart drawer, bundle builder, checkout, account, SEO, analytics, security review, **launch end of week 12** |
-| 5. App foundation | 13–16 | Expo setup, shared API client, browse screens, cart |
-| 6. App checkout & accounts | 16–20 | OTP login, Razorpay + COD, orders, wallet, push, deep links, OTA updates, account deletion |
-| 7. QA & release | 21–24 | Device testing, edge cases, TestFlight + Play testing, store listings, review, staged rollout |
+| Phase                                | Weeks | Goal                                                                                                                               |
+| ------------------------------------ | ----- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| 0. Foundations                       | 1     | Accounts (Razorpay, Shiprocket, AWS, Apple, Google Play, Firebase, SMS/WhatsApp), GST/FSSAI, monorepo + CI, design system in Figma |
+| 1. Core API                          | 2–6   | Schema, OTP auth, catalog, pricing + GST, cart, serviceability, orders, Razorpay + COD, invoices, tests                            |
+| 2. Admin panel                       | 5–8   | Admin auth + 2FA, products, orders, refunds, discounts, content, reviews, audit log                                                |
+| 3. Fulfilment, wallet, notifications | 7–9   | Shiprocket integration, tracking webhooks, NDR/RTO, trial claims, wallet ledger + jobs, refunds, message templates                 |
+| 4. Website                           | 8–12  | Storefront pages, cart drawer, bundle builder, checkout, account, SEO, analytics, security review, **launch end of week 12**       |
+| 5. App foundation                    | 13–16 | Expo setup, shared API client, browse screens, cart                                                                                |
+| 6. App checkout & accounts           | 16–20 | OTP login, Razorpay + COD, orders, wallet, push, deep links, OTA updates, account deletion                                         |
+| 7. QA & release                      | 21–24 | Device testing, edge cases, TestFlight + Play testing, store listings, review, staged rollout                                      |
 
 ### Edge cases that must be tested
 
@@ -359,7 +362,7 @@ Mobile (`apps/mobile`) uses only public values: `EXPO_PUBLIC_API_URL`, `EXPO_PUB
 ## 11. Open decisions
 
 - [ ] Brand name and domain
-- [ ] Build commerce core ourselves (NestJS) vs. self-hosted open-source engine (Medusa.js / Saleor) – decide after a 2-day spike in week 1
+- [x] Build commerce core ourselves (NestJS) vs. self-hosted open-source engine (Medusa.js / Saleor) – decided: custom NestJS core (see §12, `docs/adr/0001-custom-nestjs-core.md`)
 - [ ] SMS and WhatsApp provider
 - [ ] Subscriptions (repeat delivery) in v1 or later
 - [ ] Final GST rate and HSN code per product (confirm with CA)
@@ -370,12 +373,16 @@ Mobile (`apps/mobile`) uses only public values: `EXPO_PUBLIC_API_URL`, `EXPO_PUB
 
 Record decisions here (or as ADRs in `docs/adr/`) so every AI tool and teammate sees the same history.
 
-| Date | Decision | Reason |
-| --- | --- | --- |
-| 2026-11-19 | Fully custom build, no Shopify | Full ownership of code, data and checkout |
-| 2026-11-19 | TypeScript monorepo: NestJS + PostgreSQL, Next.js, React Native (Expo) | One language and shared types across all clients |
-| 2026-11-19 | Razorpay for payments, Shiprocket for shipping | Standard for Indian DTC; UPI + COD support; one courier integration |
-| 2026-11-19 | Website launches before the apps | Faster revenue; apps reuse the same API |
+| Date       | Decision                                                                      | Reason                                                                                                                                        |
+| ---------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-11-19 | Fully custom build, no Shopify                                                | Full ownership of code, data and checkout                                                                                                     |
+| 2026-11-19 | TypeScript monorepo: NestJS + PostgreSQL, Next.js, React Native (Expo)        | One language and shared types across all clients                                                                                              |
+| 2026-11-19 | Razorpay for payments, Shiprocket for shipping                                | Standard for Indian DTC; UPI + COD support; one courier integration                                                                           |
+| 2026-11-19 | Website launches before the apps                                              | Faster revenue; apps reuse the same API                                                                                                       |
+| 2026-11-19 | Custom NestJS commerce core; no Medusa/Saleor spike                           | Our trial-cashback wallet, GST invoicing and Shiprocket/COD flows are the core of the product and would fight an engine's model; see ADR 0001 |
+| 2026-11-19 | Native ESM across the API and `packages/shared`; Vitest (+ SWC) for API tests | NestJS 12 is ESM-only; one test runner for the whole repo                                                                                     |
+| 2026-11-19 | Pin TypeScript ~5.9                                                           | TypeScript 7 is not yet supported by typescript-eslint and Nest tooling; revisit when it is                                                   |
+| 2026-11-19 | Prisma 7 (stable), not 8 RC                                                   | npm `latest` points at an 8.0 release candidate; stay on stable                                                                               |
 
 ---
 

@@ -1,0 +1,12 @@
+// Prisma schema. Tables (CLAUDE.md §5) are added in Phase 1, only through migrations:
+//   pnpm --filter @brand/api exec prisma migrate dev --name <change>
+// The connection URL comes from prisma.config.ts (DATABASE_URL).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
