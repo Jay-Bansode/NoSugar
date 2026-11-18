@@ -5,7 +5,7 @@
 - **Brand name:** TBD (use `brand` / `Brand` as placeholders in code)
 - **Market:** India only (INR, GST, Hindi/English users, UPI-first, Cash on Delivery)
 - **Last updated:** 2026-11-19
-- **Current phase:** Phase 0 – Foundations: monorepo + CI done; accounts, GST/FSSAI and Figma design system pending (update this line as work progresses)
+- **Current phase:** Phase 1 – Core API: slice 1 (schema, migration, seed) done; next slice 2 (OTP auth). Phase 0 non-code items (accounts, GST/FSSAI, Figma) still pending (update this line as work progresses)
 
 ---
 
@@ -158,6 +158,10 @@ pending_payment → payment_failed | cancelled (timeout)
 confirmed/packed → cancelled (before dispatch only)
 shipped/out_for_delivery → undelivered → (reattempt) | rto → returned
 delivered → refunded (full) | partially_refunded
+payment_failed → confirmed (late capture on the same Razorpay order)
+shipped | undelivered → delivered (courier skips the out-for-delivery scan)
+returned → refunded · partially_refunded → refunded
+COD orders start at confirmed (no payment step)
 ```
 
 **Trial claim status**
@@ -373,16 +377,19 @@ Mobile (`apps/mobile`) uses only public values: `EXPO_PUBLIC_API_URL`, `EXPO_PUB
 
 Record decisions here (or as ADRs in `docs/adr/`) so every AI tool and teammate sees the same history.
 
-| Date       | Decision                                                                      | Reason                                                                                                                                        |
-| ---------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-11-19 | Fully custom build, no Shopify                                                | Full ownership of code, data and checkout                                                                                                     |
-| 2026-11-19 | TypeScript monorepo: NestJS + PostgreSQL, Next.js, React Native (Expo)        | One language and shared types across all clients                                                                                              |
-| 2026-11-19 | Razorpay for payments, Shiprocket for shipping                                | Standard for Indian DTC; UPI + COD support; one courier integration                                                                           |
-| 2026-11-19 | Website launches before the apps                                              | Faster revenue; apps reuse the same API                                                                                                       |
-| 2026-11-19 | Custom NestJS commerce core; no Medusa/Saleor spike                           | Our trial-cashback wallet, GST invoicing and Shiprocket/COD flows are the core of the product and would fight an engine's model; see ADR 0001 |
-| 2026-11-19 | Native ESM across the API and `packages/shared`; Vitest (+ SWC) for API tests | NestJS 12 is ESM-only; one test runner for the whole repo                                                                                     |
-| 2026-11-19 | Pin TypeScript ~5.9                                                           | TypeScript 7 is not yet supported by typescript-eslint and Nest tooling; revisit when it is                                                   |
-| 2026-11-19 | Prisma 7 (stable), not 8 RC                                                   | npm `latest` points at an 8.0 release candidate; stay on stable                                                                               |
+| Date       | Decision                                                                                                                                            | Reason                                                                                                                                        |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-11-19 | Fully custom build, no Shopify                                                                                                                      | Full ownership of code, data and checkout                                                                                                     |
+| 2026-11-19 | TypeScript monorepo: NestJS + PostgreSQL, Next.js, React Native (Expo)                                                                              | One language and shared types across all clients                                                                                              |
+| 2026-11-19 | Razorpay for payments, Shiprocket for shipping                                                                                                      | Standard for Indian DTC; UPI + COD support; one courier integration                                                                           |
+| 2026-11-19 | Website launches before the apps                                                                                                                    | Faster revenue; apps reuse the same API                                                                                                       |
+| 2026-11-19 | Custom NestJS commerce core; no Medusa/Saleor spike                                                                                                 | Our trial-cashback wallet, GST invoicing and Shiprocket/COD flows are the core of the product and would fight an engine's model; see ADR 0001 |
+| 2026-11-19 | Native ESM across the API and `packages/shared`; Vitest (+ SWC) for API tests                                                                       | NestJS 12 is ESM-only; one test runner for the whole repo                                                                                     |
+| 2026-11-19 | Pin TypeScript ~5.9                                                                                                                                 | TypeScript 7 is not yet supported by typescript-eslint and Nest tooling; revisit when it is                                                   |
+| 2026-11-19 | Prisma 7 (stable), not 8 RC                                                                                                                         | npm `latest` points at an 8.0 release candidate; stay on stable                                                                               |
+| 2026-11-19 | Order state machine lives in `packages/shared/src/order-status.ts`; §5 extended with late capture, direct delivery, refund after return             | Real courier/Razorpay behaviour; one table used by API and clients, Prisma enum checked against it in tests                                   |
+| 2026-11-19 | DB-level integrity: CHECK constraints (money, totals, stock, GST split) and an append-only trigger on `order_events`, hand-written in migration SQL | Prisma cannot declare them; proven by `test:db` against real Postgres in CI                                                                   |
+| 2026-11-19 | UUIDv7 primary keys; `order_events` uses a bigint sequence                                                                                          | Time-ordered ids index well; events need strict ordering                                                                                      |
 
 ---
 

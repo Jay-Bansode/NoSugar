@@ -18,6 +18,11 @@ const STATUS_TO_CODE: Partial<Record<number, ErrorCode>> = {
   [HttpStatus.CONFLICT]: ErrorCode.CONFLICT,
   [HttpStatus.UNPROCESSABLE_ENTITY]: ErrorCode.VALIDATION_FAILED,
   [HttpStatus.TOO_MANY_REQUESTS]: ErrorCode.RATE_LIMITED,
+  [HttpStatus.SERVICE_UNAVAILABLE]: ErrorCode.SERVICE_UNAVAILABLE,
+};
+
+const GENERIC_5XX_MESSAGE: Partial<Record<number, string>> = {
+  [HttpStatus.SERVICE_UNAVAILABLE]: 'Service unavailable',
 };
 
 /** Converts any thrown error into the API error shape from CLAUDE.md §7. */
@@ -36,7 +41,8 @@ export function toErrorResponse(exception: unknown): { status: number; body: Err
     const code =
       STATUS_TO_CODE[status] ?? (status >= 500 ? ErrorCode.INTERNAL : ErrorCode.BAD_REQUEST);
     // Never leak internals on 5xx.
-    const message = status >= 500 ? 'Internal server error' : exception.message;
+    const message =
+      status >= 500 ? (GENERIC_5XX_MESSAGE[status] ?? 'Internal server error') : exception.message;
     return { status, body: { error: { code, message, details: {} } } };
   }
 
@@ -52,7 +58,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const { status, body } = toErrorResponse(exception);
-    if (status >= 500) {
+    // Expected failures (AppException, e.g. readiness 503) are not logged as errors.
+    if (status >= 500 && !(exception instanceof AppException)) {
       this.logger.error(exception instanceof Error ? exception.stack : String(exception));
     }
     host.switchToHttp().getResponse<Response>().status(status).json(body);

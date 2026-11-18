@@ -1,4 +1,9 @@
-import { HttpStatus, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import {
+  HttpStatus,
+  InternalServerErrorException,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ErrorCode, errorResponseSchema } from '@brand/shared';
 import { describe, expect, it } from 'vitest';
 import { AppException } from './app.exception.js';
@@ -23,11 +28,21 @@ describe('toErrorResponse', () => {
   });
 
   it('hides messages on 5xx HTTP exceptions', () => {
-    const result = toErrorResponse(new ServiceUnavailableException('db host 10.0.0.5 down'));
-    expect(result.status).toBe(503);
+    const result = toErrorResponse(new InternalServerErrorException('db host 10.0.0.5 down'));
+    expect(result.status).toBe(500);
     expect(result.body.error).toEqual({
       code: ErrorCode.INTERNAL,
       message: 'Internal server error',
+      details: {},
+    });
+  });
+
+  it('maps 503 to SERVICE_UNAVAILABLE with a generic message', () => {
+    const result = toErrorResponse(new ServiceUnavailableException('db host 10.0.0.5 down'));
+    expect(result.status).toBe(503);
+    expect(result.body.error).toEqual({
+      code: ErrorCode.SERVICE_UNAVAILABLE,
+      message: 'Service unavailable',
       details: {},
     });
   });

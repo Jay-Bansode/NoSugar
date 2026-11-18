@@ -6,6 +6,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { HttpExceptionFilter } from './common/http-exception.filter.js';
 import { ENV, type Env } from './config/env.js';
 import { HealthModule } from './modules/health/health.module.js';
+import { PrismaModule } from './prisma/prisma.module.js';
 
 /** Never log credentials, cookies, OTPs or phone numbers (CLAUDE.md §8). */
 const REDACT_PATHS = [
@@ -47,6 +48,7 @@ export class AppModule {
             customProps: (req: IncomingMessage) => ({ requestId: req.id }),
           },
         }),
+        PrismaModule,
         HealthModule,
       ],
       providers: [{ provide: APP_FILTER, useClass: HttpExceptionFilter }],

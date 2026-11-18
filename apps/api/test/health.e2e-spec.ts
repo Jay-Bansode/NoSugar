@@ -15,7 +15,8 @@ describe('API (e2e)', () => {
       NODE_ENV: 'test',
       LOG_LEVEL: 'silent',
       APP_VERSION: '9.9.9',
-      DATABASE_URL: 'postgresql://brand:brand@localhost:5432/brand',
+      // Nothing listens on port 1: lets us prove readiness fails cleanly without a database.
+      DATABASE_URL: 'postgresql://brand:brand@127.0.0.1:1/brand',
       REDIS_URL: 'redis://localhost:6379',
     });
     const moduleRef = await Test.createTestingModule({
@@ -40,6 +41,15 @@ describe('API (e2e)', () => {
   it('does not send X-Powered-By', async () => {
     const res = await request(app.getHttpServer()).get('/v1/health').expect(200);
     expect(res.headers['x-powered-by']).toBeUndefined();
+  });
+
+  it('GET /v1/health/ready → 503 SERVICE_UNAVAILABLE when the database is unreachable', async () => {
+    const res = await request(app.getHttpServer()).get('/v1/health/ready').expect(503);
+    expect(errorResponseSchema.parse(res.body).error).toEqual({
+      code: 'SERVICE_UNAVAILABLE',
+      message: 'Not ready',
+      details: { checks: { database: 'down' } },
+    });
   });
 
   it('routes live only under /v1', async () => {
