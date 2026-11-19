@@ -458,6 +458,8 @@ model OrderItem {
   unitPricePaise  Int     @map("unit_price_paise")
   quantity        Int
   lineTotalPaise  Int     @map("line_total_paise")
+  /// This line's share of the order discount; taxable value = line total − discount.
+  discountPaise   Int     @default(0) @map("discount_paise")
   taxPaise        Int     @map("tax_paise")
 
   order   Order    @relation(fields: [orderId], references: [id], onDelete: Restrict)

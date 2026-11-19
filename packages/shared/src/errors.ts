@@ -27,6 +27,12 @@ export const ErrorCode = {
   CART_FULL: 'CART_FULL',
   /** One-per-customer item (the trial kit) already in the cart or already bought. */
   PURCHASE_LIMIT: 'PURCHASE_LIMIT',
+  CART_EMPTY: 'CART_EMPTY',
+  /** Some cart lines can't be bought (see the cart's line issues). */
+  CART_HAS_ISSUES: 'CART_HAS_ISSUES',
+  /** We can't deliver to this PIN code. */
+  NOT_SERVICEABLE: 'NOT_SERVICEABLE',
+  ORDER_NOT_CANCELLABLE: 'ORDER_NOT_CANCELLABLE',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

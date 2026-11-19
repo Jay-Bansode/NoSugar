@@ -10,3 +10,5 @@ export * from './catalog.js';
 export * from './pricing.js';
 export * from './cart.js';
 export * from './shipping.js';
+export * from './address.js';
+export * from './orders.js';
