@@ -7,3 +7,4 @@ export * from './settings.js';
 export * from './phone.js';
 export * from './auth.js';
 export * from './catalog.js';
+export * from './pricing.js';

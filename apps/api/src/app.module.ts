@@ -7,6 +7,8 @@ import { HttpExceptionFilter } from './common/http-exception.filter.js';
 import { ENV, type Env } from './config/env.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { CatalogModule } from './modules/catalog/catalog.module.js';
+import { PricingModule } from './modules/pricing/pricing.module.js';
+import { SettingsModule } from './settings/settings.service.js';
 import { HealthModule } from './modules/health/health.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { RedisModule } from './redis/redis.module.js';
@@ -53,8 +55,10 @@ export class AppModule {
         }),
         PrismaModule,
         RedisModule,
+        SettingsModule,
         AuthModule,
         CatalogModule,
+        PricingModule,
         HealthModule,
       ],
       providers: [{ provide: APP_FILTER, useClass: HttpExceptionFilter }],

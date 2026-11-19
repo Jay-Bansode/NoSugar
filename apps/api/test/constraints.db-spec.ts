@@ -194,6 +194,32 @@ describe('orders', () => {
     );
   });
 
+  it('allows GST above the payable total when wallet credit paid part of it', async () => {
+    // ₹699 15-pack, ₹600 wallet → ₹99 payable but ₹33.29 GST inside the ₹699 sale.
+    const { id } = await insertUser();
+    const sql = `INSERT INTO orders
+      (id, number, customer_id, status, payment_method, subtotal_paise, discount_paise, wallet_paise,
+       shipping_paise, cod_fee_paise, tax_paise, total_paise, shipping_address, idempotency_key, updated_at)
+      VALUES ($1, $2, $3, 'pending_payment', 'prepaid', 69900, 0, $4, 0, 0, $5, $6, '{}', $7, now())`;
+    const params = (wallet: number, taxPaise: number, total: number) => [
+      randomUUID(),
+      `T-${randomUUID().slice(0, 8)}`,
+      id,
+      wallet,
+      taxPaise,
+      total,
+      randomUUID(),
+    ];
+    await q(sql, params(60000, 3329, 9900));
+    // But never more GST than the amount charged before wallet.
+    await expectPgError(
+      sql,
+      params(60000, 70000, 9900),
+      PG.checkViolation,
+      'orders_tax_lte_charged_chk',
+    );
+  });
+
   it('idempotency key is unique per customer', async () => {
     const { id } = await insertUser();
     const key = randomUUID();

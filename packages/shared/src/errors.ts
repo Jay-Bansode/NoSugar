@@ -15,6 +15,13 @@ export const ErrorCode = {
   OTP_INVALID: 'OTP_INVALID',
   OTP_EXPIRED: 'OTP_EXPIRED',
   OTP_TOO_MANY_ATTEMPTS: 'OTP_TOO_MANY_ATTEMPTS',
+  /** Unknown, inactive, not yet started or expired code. */
+  DISCOUNT_INVALID: 'DISCOUNT_INVALID',
+  /** Valid code that can't be used here: usage limit reached or already used by this customer. */
+  DISCOUNT_NOT_APPLICABLE: 'DISCOUNT_NOT_APPLICABLE',
+  /** Cart item no longer sellable (inactive) or malformed (bad bundle selection). */
+  ITEM_UNAVAILABLE: 'ITEM_UNAVAILABLE',
+  COD_UNAVAILABLE: 'COD_UNAVAILABLE',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
