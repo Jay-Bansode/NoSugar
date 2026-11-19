@@ -8,7 +8,7 @@ One folder per domain module (CLAUDE.md Â§4). Each module has `*.module.ts`, `
 | `auth`                           | 1     | done    |
 | `catalog`                        | 1     | done    |
 | `pricing`                        | 1     | done    |
-| `cart`                           | 1     | planned |
+| `cart`                           | 1     | done    |
 | `checkout`                       | 1     | planned |
 | `orders`                         | 1     | planned |
 | `payments`                       | 1     | planned |

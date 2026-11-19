@@ -22,6 +22,11 @@ export const ErrorCode = {
   /** Cart item no longer sellable (inactive) or malformed (bad bundle selection). */
   ITEM_UNAVAILABLE: 'ITEM_UNAVAILABLE',
   COD_UNAVAILABLE: 'COD_UNAVAILABLE',
+  /** Guest cart id unknown, expired or not usable by this client: drop it and start over. */
+  CART_NOT_FOUND: 'CART_NOT_FOUND',
+  CART_FULL: 'CART_FULL',
+  /** One-per-customer item (the trial kit) already in the cart or already bought. */
+  PURCHASE_LIMIT: 'PURCHASE_LIMIT',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

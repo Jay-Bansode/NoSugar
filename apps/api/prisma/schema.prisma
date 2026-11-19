@@ -368,10 +368,12 @@ model DiscountRedemption {
 /// Server-side cart. Guest carts have no user and are addressed by id; at login a guest
 /// cart is merged into the customer's cart.
 model Cart {
-  id        String   @id @default(uuid(7)) @db.Uuid
-  userId    String?  @unique @map("user_id") @db.Uuid
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id           String   @id @default(uuid(7)) @db.Uuid
+  userId       String?  @unique @map("user_id") @db.Uuid
+  /// Code the customer entered; re-validated every time the cart is priced.
+  discountCode String?  @map("discount_code")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   user  User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
   items CartItem[]

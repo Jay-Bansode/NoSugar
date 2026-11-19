@@ -6,6 +6,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { HttpExceptionFilter } from './common/http-exception.filter.js';
 import { ENV, type Env } from './config/env.js';
 import { AuthModule } from './modules/auth/auth.module.js';
+import { CartModule } from './modules/cart/cart.module.js';
 import { CatalogModule } from './modules/catalog/catalog.module.js';
 import { PricingModule } from './modules/pricing/pricing.module.js';
 import { SettingsModule } from './settings/settings.service.js';
@@ -59,6 +60,7 @@ export class AppModule {
         AuthModule,
         CatalogModule,
         PricingModule,
+        CartModule,
         HealthModule,
       ],
       providers: [{ provide: APP_FILTER, useClass: HttpExceptionFilter }],

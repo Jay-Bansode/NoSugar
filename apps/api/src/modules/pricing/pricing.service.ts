@@ -22,6 +22,8 @@ export type PricingItem =
 
 /** A priced line plus everything an order needs to snapshot it (CLAUDE.md §8). */
 export interface ResolvedLine extends PricingLine {
+  /** Product of a variant line; null for bundles. */
+  productId: string | null;
   variantId: string | null;
   bundleId: string | null;
   /** Chosen variant ids for a bundle, in the customer's order. */
@@ -63,22 +65,38 @@ export class PricingService {
     private readonly settings: SettingsService,
   ) {}
 
+  /** Strict: every item must be sellable. Used by checkout. */
   async quote(request: QuoteRequest): Promise<QuoteResult> {
     const now = request.now ?? new Date();
     const lines = await this.resolveItems(request.items);
     const discount = request.discountCode
       ? await this.resolveDiscount(request.discountCode, request.customerId ?? null, now)
       : null;
-    const fees = await this.settings.pricingFees();
+    return this.price(lines, {
+      paymentMethod: request.paymentMethod,
+      discount,
+      walletAvailablePaise: request.walletAvailablePaise ?? 0,
+    });
+  }
 
+  /** Prices already-resolved lines with current fee settings. */
+  async price(
+    lines: ResolvedLine[],
+    options: {
+      paymentMethod: PaymentMethod;
+      discount: { pricing: PricingDiscount; applied: AppliedDiscount } | null;
+      walletAvailablePaise: number;
+    },
+  ): Promise<QuoteResult> {
+    const fees = await this.settings.pricingFees();
     let quote: PriceQuote;
     try {
       quote = priceOrder({
         lines,
         fees,
-        paymentMethod: request.paymentMethod,
-        discount: discount?.pricing ?? null,
-        walletAvailablePaise: request.walletAvailablePaise ?? 0,
+        paymentMethod: options.paymentMethod,
+        discount: options.discount?.pricing ?? null,
+        walletAvailablePaise: options.walletAvailablePaise,
       });
     } catch (err) {
       throw toAppException(err);
@@ -86,22 +104,23 @@ export class PricingService {
     return {
       quote,
       lines,
-      discount: discount && quote.discountPaise > 0 ? discount.applied : null,
+      discount: options.discount && quote.discountPaise > 0 ? options.discount.applied : null,
     };
   }
 
   /** Loads current prices for the items. Inactive or malformed items → ITEM_UNAVAILABLE. */
   async resolveItems(items: PricingItem[]): Promise<ResolvedLine[]> {
-    for (const item of items) {
-      if (
-        !Number.isInteger(item.quantity) ||
-        item.quantity < 1 ||
-        item.quantity > MAX_LINE_QUANTITY
-      ) {
-        throw unavailable(item.key, `Quantity must be between 1 and ${MAX_LINE_QUANTITY}`);
-      }
-    }
+    const results = await this.resolveEach(items);
+    const failure = results.find((r) => r instanceof AppException);
+    if (failure) throw failure;
+    return results as ResolvedLine[];
+  }
 
+  /**
+   * Lenient: resolves each item independently, returning an AppException in place of any
+   * item that can't be sold. Used by the cart, which shows such lines with an issue.
+   */
+  async resolveEach(items: PricingItem[]): Promise<(ResolvedLine | AppException)[]> {
     const variantIds = new Set<string>();
     const bundleIds = new Set<string>();
     for (const item of items) {
@@ -125,10 +144,17 @@ export class PricingService {
     const variantById = new Map(variants.map((v) => [v.id, v]));
     const bundleById = new Map(bundles.map((b) => [b.id, b]));
 
-    return items.map((item): ResolvedLine => {
+    return items.map((item): ResolvedLine | AppException => {
+      if (
+        !Number.isInteger(item.quantity) ||
+        item.quantity < 1 ||
+        item.quantity > MAX_LINE_QUANTITY
+      ) {
+        return unavailable(item.key, `Quantity must be between 1 and ${MAX_LINE_QUANTITY}`);
+      }
       if ('variantId' in item) {
         const variant = variantById.get(item.variantId);
-        if (!variant) throw unavailable(item.key, 'This item is no longer available');
+        if (!variant) return unavailable(item.key, 'This item is no longer available');
         return {
           key: item.key,
           unitPricePaise: variant.pricePaise,
@@ -137,6 +163,7 @@ export class PricingService {
           discountable: variant.product.type !== 'trial_kit',
           walletEligible:
             variant.product.type === 'coffee' && variant.packSize === WALLET_ELIGIBLE_PACK_SIZE,
+          productId: variant.productId,
           variantId: variant.id,
           bundleId: null,
           selection: null,
@@ -149,14 +176,14 @@ export class PricingService {
       }
 
       const bundle = bundleById.get(item.bundleId);
-      if (!bundle) throw unavailable(item.key, 'This bundle is no longer available');
+      if (!bundle) return unavailable(item.key, 'This bundle is no longer available');
       const allowed = new Set(bundle.items.map((i) => i.variantId));
       const picks = item.selection.map((id) => variantById.get(id));
       if (
         item.selection.length !== bundle.slots ||
         picks.some((v, i) => !v || !allowed.has(item.selection[i]!))
       ) {
-        throw unavailable(item.key, `Pick ${bundle.slots} available packs for this bundle`);
+        return unavailable(item.key, `Pick ${bundle.slots} available packs for this bundle`);
       }
       return {
         key: item.key,
@@ -165,6 +192,7 @@ export class PricingService {
         gstRateBps: bundle.gstRateBps,
         discountable: true,
         walletEligible: false,
+        productId: null,
         variantId: null,
         bundleId: bundle.id,
         selection: [...item.selection],
