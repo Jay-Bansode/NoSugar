@@ -6,3 +6,4 @@ export * from './order-status.js';
 export * from './settings.js';
 export * from './phone.js';
 export * from './auth.js';
+export * from './catalog.js';

@@ -5,7 +5,7 @@
 - **Brand name:** TBD (use `brand` / `Brand` as placeholders in code)
 - **Market:** India only (INR, GST, Hindi/English users, UPI-first, Cash on Delivery)
 - **Last updated:** 2026-11-19
-- **Current phase:** Phase 1 – Core API: slices 1 (schema, migration, seed) and 2 (OTP auth) done; next slice 3 (catalog). Phase 0 non-code items (accounts, GST/FSSAI, Figma) still pending (update this line as work progresses)
+- **Current phase:** Phase 1 – Core API: slices 1 (schema, migration, seed), 2 (OTP auth) and 3 (catalog) done; next slice 4 (pricing). Phase 0 non-code items (accounts, GST/FSSAI, Figma) still pending (update this line as work progresses)
 
 ---
 
@@ -224,6 +224,8 @@ Every transition writes a row to `order_events` (or the equivalent events table)
 | ----------------------------------------------------------------------------------------------- | --------------------------------------------------- |
 | `POST /v1/auth/otp` · `POST /v1/auth/verify` · `POST /v1/auth/refresh` · `POST /v1/auth/logout` | Login                                               |
 | `GET /v1/products` · `GET /v1/products/:slug` · `GET /v1/collections/:slug`                     | Catalog                                             |
+| `GET /v1/bundles` · `GET /v1/bundles/:slug`                                                     | Bundles and their pickable packs (bundle builder)   |
+| `GET /v1/me`                                                                                    | Logged-in customer profile                          |
 | `GET/POST/PATCH/DELETE /v1/cart` and `/v1/cart/items`                                           | Cart                                                |
 | `GET /v1/serviceability?pincode=`                                                               | Delivery check                                      |
 | `POST /v1/checkout`                                                                             | Create order + Razorpay order                       |
@@ -368,6 +370,8 @@ Mobile (`apps/mobile`) uses only public values: `EXPO_PUBLIC_API_URL`, `EXPO_PUB
 
 ## 11. Open decisions
 
+Owner-facing list with deadlines, options and placeholders in use: [`docs/pending-decisions.md`](docs/pending-decisions.md). Keep both in sync.
+
 - [ ] Brand name and domain
 - [x] Build commerce core ourselves (NestJS) vs. self-hosted open-source engine (Medusa.js / Saleor) – decided: custom NestJS core (see §12, `docs/adr/0001-custom-nestjs-core.md`)
 - [ ] SMS and WhatsApp provider (OTP code is behind the `OtpSender` interface; a dev console sender stands in, refused in production)
@@ -398,6 +402,9 @@ Record decisions here (or as ADRs in `docs/adr/`) so every AI tool and teammate 
 | 2026-11-19 | OTPs only in Redis, as HMACs bound to the phone; 5-minute TTL, 30-second resend, 5 attempts; Redis keys use a hashed phone                                | Codes and raw phone numbers never stored or logged                                                                                            |
 | 2026-11-19 | Global deny-by-default auth guard; routes opt out with `@Public()`                                                                                        | A new route can't be left open by accident                                                                                                    |
 | 2026-11-19 | `ioredis` for Redis                                                                                                                                       | Required by BullMQ later; one client for rate limits, OTPs and queues                                                                         |
+| 2026-11-19 | Public catalog shows `inStock` flags only, never stock counts, HSN codes or GST rates; one mapper (`catalog.mapper.ts`) decides what leaves the API       | Competitors can't scrape inventory; tax data stays internal                                                                                   |
+| 2026-11-19 | Catalog responses cached `public, max-age=60, stale-while-revalidate=300`; no Redis cache yet                                                             | Edits show within a minute; add server-side caching only if traffic needs it                                                                  |
+| 2026-11-19 | Added `GET /v1/bundles` and `/v1/bundles/:slug` to §7                                                                                                     | The bundle builder needs the list of pickable packs                                                                                           |
 
 ---
 

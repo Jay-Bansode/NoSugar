@@ -25,6 +25,8 @@ export const envSchema = z
     OTP_SECRET: secret('OTP_SECRET'),
     /** Only "console" exists until the SMS/WhatsApp provider is chosen (CLAUDE.md §11). */
     OTP_PROVIDER: z.enum(['console']).default('console'),
+    /** Public base URL for product media (S3 + CDN). Until the CDN exists, paths stay relative. */
+    CDN_BASE_URL: z.url({ protocol: /^https?$/ }).optional(),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production' && env.OTP_PROVIDER === 'console') {
