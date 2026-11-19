@@ -4,3 +4,5 @@ export * from './errors.js';
 export * from './pagination.js';
 export * from './order-status.js';
 export * from './settings.js';
+export * from './phone.js';
+export * from './auth.js';

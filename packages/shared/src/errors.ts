@@ -12,6 +12,9 @@ export const ErrorCode = {
   OUT_OF_STOCK: 'OUT_OF_STOCK',
   INTERNAL: 'INTERNAL',
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
+  OTP_INVALID: 'OTP_INVALID',
+  OTP_EXPIRED: 'OTP_EXPIRED',
+  OTP_TOO_MANY_ATTEMPTS: 'OTP_TOO_MANY_ATTEMPTS',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

@@ -30,6 +30,15 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     env:
       # Only the db steps use this; unit/e2e tests never touch the database.
       CI_DATABASE_URL: postgresql://brand:brand@localhost:5432/brand?schema=public
@@ -71,10 +80,11 @@ jobs:
         env:
           DATABASE_URL: ${{ env.CI_DATABASE_URL }}
 
-      - name: Database tests
+      - name: Database + Redis integration tests
         run: pnpm --filter @brand/api test:db
         env:
           DATABASE_URL: ${{ env.CI_DATABASE_URL }}
+          REDIS_URL: redis://localhost:6379
 
       - name: Seed (idempotency check)
         run: pnpm --filter @brand/api db:seed && pnpm --filter @brand/api db:seed

@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { TEST_ENV } from '../../test/helpers/env.js';
 import { EnvValidationError, loadEnv } from './env.js';
 
-const valid = {
-  NODE_ENV: 'test',
-  DATABASE_URL: 'postgresql://brand:brand@localhost:5432/brand',
-  REDIS_URL: 'redis://localhost:6379',
-};
+const valid = { ...TEST_ENV };
 
 function errorFrom(fn: () => unknown): EnvValidationError {
   try {
@@ -19,17 +16,26 @@ function errorFrom(fn: () => unknown): EnvValidationError {
 
 describe('loadEnv', () => {
   it('parses a valid environment and applies defaults', () => {
-    expect(loadEnv(valid)).toEqual({ ...valid, PORT: 3000, APP_VERSION: '0.0.0' });
+    expect(loadEnv(valid)).toEqual({
+      ...valid,
+      PORT: 3000,
+      APP_VERSION: '0.0.0',
+      TRUST_PROXY: 0,
+      OTP_PROVIDER: 'console',
+    });
   });
 
-  it('coerces PORT', () => {
-    expect(loadEnv({ ...valid, PORT: '8080' }).PORT).toBe(8080);
+  it('coerces PORT and TRUST_PROXY', () => {
+    const env = loadEnv({ ...valid, PORT: '8080', TRUST_PROXY: '1' });
+    expect(env.PORT).toBe(8080);
+    expect(env.TRUST_PROXY).toBe(1);
   });
 
   it('names every missing variable', () => {
     const { message } = errorFrom(() => loadEnv({ NODE_ENV: 'test' }));
-    expect(message).toContain('DATABASE_URL');
-    expect(message).toContain('REDIS_URL');
+    for (const name of ['DATABASE_URL', 'REDIS_URL', 'JWT_ACCESS_SECRET', 'OTP_SECRET']) {
+      expect(message).toContain(name);
+    }
   });
 
   it('rejects a non-Postgres DATABASE_URL without echoing the value', () => {
@@ -38,5 +44,21 @@ describe('loadEnv', () => {
     );
     expect(message).toContain('DATABASE_URL');
     expect(message).not.toContain('s3cret');
+  });
+
+  it('rejects short secrets without echoing them', () => {
+    const { message } = errorFrom(() => loadEnv({ ...valid, JWT_ACCESS_SECRET: 'short-secret' }));
+    expect(message).toContain('JWT_ACCESS_SECRET');
+    expect(message).not.toContain('short-secret');
+  });
+
+  it('rejects reused secrets', () => {
+    const { message } = errorFrom(() => loadEnv({ ...valid, OTP_SECRET: valid.JWT_ACCESS_SECRET }));
+    expect(message).toContain('must all be different');
+  });
+
+  it('refuses the console OTP provider in production', () => {
+    const { message } = errorFrom(() => loadEnv({ ...valid, NODE_ENV: 'production' }));
+    expect(message).toContain('OTP_PROVIDER');
   });
 });
