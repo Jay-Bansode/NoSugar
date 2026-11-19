@@ -24,15 +24,15 @@ These must be settled before the website goes live (end of week 12).
 
 Needed before the related code can be tested against real services.
 
-| #   | Item                                                           | Needed for                                                         | Needed by                       |
-| --- | -------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------- |
-| 10  | **Razorpay** account (test + live keys, webhook secret)        | Payments                                                           | Phase 1 payments (week 4)       |
-| 11  | **Shiprocket** account + a dedicated API user, pickup location | Serviceability checks, shipping, COD                               | Phase 1 serviceability (week 3) |
-| 12  | **GSTIN, seller state code, FSSAI licence number**             | Invoices (`SELLER_GSTIN`, `SELLER_STATE_CODE`, `FSSAI_LICENSE_NO`) | Phase 1 invoices (week 5)       |
-| 13  | **AWS** (or chosen host) account                               | S3 media, hosting                                                  | Phase 4 (week 9)                |
-| 14  | **Firebase** project                                           | Push notifications                                                 | Phase 6 (week 16)               |
-| 15  | **Apple Developer** and **Google Play** accounts               | App builds, TestFlight, store listings                             | Phase 5 (week 13)               |
-| 16  | **Design system in Figma**                                     | Website and app UI                                                 | Phase 4 (week 8)                |
+| #   | Item                                                                                | Needed for                                                                                                                                        | Needed by                       |
+| --- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| 10  | **Razorpay** account (test + live keys, webhook secret)                             | Payments                                                                                                                                          | Phase 1 payments (week 4)       |
+| 11  | **Shiprocket** account + a dedicated API user, pickup location and its **PIN code** | Real delivery checks (a stand-in is used until then), shipping, COD. Once ready, the assistant runs one live check to confirm the response format | Phase 1 serviceability (week 3) |
+| 12  | **GSTIN, seller state code, FSSAI licence number**                                  | Invoices (`SELLER_GSTIN`, `SELLER_STATE_CODE`, `FSSAI_LICENSE_NO`)                                                                                | Phase 1 invoices (week 5)       |
+| 13  | **AWS** (or chosen host) account                                                    | S3 media, hosting                                                                                                                                 | Phase 4 (week 9)                |
+| 14  | **Firebase** project                                                                | Push notifications                                                                                                                                | Phase 6 (week 16)               |
+| 15  | **Apple Developer** and **Google Play** accounts                                    | App builds, TestFlight, store listings                                                                                                            | Phase 5 (week 13)               |
+| 16  | **Design system in Figma**                                                          | Website and app UI                                                                                                                                | Phase 4 (week 8)                |
 
 ## Choices with a default (confirm or change)
 

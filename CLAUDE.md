@@ -5,7 +5,7 @@
 - **Brand name:** TBD (use `brand` / `Brand` as placeholders in code)
 - **Market:** India only (INR, GST, Hindi/English users, UPI-first, Cash on Delivery)
 - **Last updated:** 2026-11-19
-- **Current phase:** Phase 1 – Core API: slices 1 (schema, migration, seed), 2 (OTP auth), 3 (catalog), 4 (pricing) and 5 (cart) done; next slice 6 (serviceability). Phase 0 non-code items (accounts, GST/FSSAI, Figma) still pending (update this line as work progresses)
+- **Current phase:** Phase 1 – Core API: slices 1 (schema, migration, seed), 2 (OTP auth), 3 (catalog), 4 (pricing), 5 (cart) and 6 (serviceability, against a stand-in until the Shiprocket account exists) done; next slice 7 (checkout and orders). Phase 0 non-code items (accounts, GST/FSSAI, Figma) still pending (update this line as work progresses)
 
 ---
 
@@ -323,6 +323,9 @@ SHIPROCKET_API_EMAIL=        # dedicated API user, not the main login
 SHIPROCKET_API_PASSWORD=
 SHIPROCKET_WEBHOOK_TOKEN=
 SHIPROCKET_PICKUP_LOCATION=
+SHIPROCKET_PICKUP_PINCODE=   # warehouse PIN; serviceability is checked from here
+SHIPROCKET_API_BASE=         # default https://apiv2.shiprocket.in/v1/external
+SHIPPING_PROVIDER=           # "stub" (dev only, refused in production) or "shiprocket"
 SMS_PROVIDER_API_KEY=
 WHATSAPP_PROVIDER_API_KEY=
 FCM_SERVICE_ACCOUNT_JSON=
@@ -414,6 +417,10 @@ Record decisions here (or as ADRs in `docs/adr/`) so every AI tool and teammate 
 | 2026-11-19 | Cart mutations lock the cart row (`SELECT … FOR UPDATE`); stock checks use the whole cart's demand per variant (bundle picks included)                               | No duplicate lines under concurrent requests; bundles can't oversell a pack                                                                   |
 | 2026-11-19 | `@OptionalAuth()` routes accept guests, but a present-and-invalid token is still 401                                                                                 | Clients refresh their token instead of silently becoming a guest                                                                              |
 | 2026-11-19 | Abandoned guest carts are not yet cleaned up                                                                                                                         | Add a cleanup job with the other background jobs in Phase 3                                                                                   |
+| 2026-11-19 | Serviceability sits behind a `ServiceabilityProvider` interface: Shiprocket in production, a deterministic stub in development (refused in production)               | Work continues before the Shiprocket account exists; the stub covers every storefront state                                                   |
+| 2026-11-19 | Courier answers cached in Redis for 6 h per PIN and 500 g weight bucket; failures never cached; COD switch and dispatch days applied on every call                   | Fewer paid API calls, fast checkout, settings changes visible at once                                                                         |
+| 2026-11-19 | Delivery estimate = courier days (min–max across couriers) + `shipping.dispatch_days` setting (default 1)                                                            | Matches "dispatch within 24 hours" without hard-coding it                                                                                     |
+| 2026-11-19 | Shiprocket test fixtures are modelled on the documented response format, not recorded                                                                                | No account yet; replace with recorded responses once credentials exist                                                                        |
 
 ---
 

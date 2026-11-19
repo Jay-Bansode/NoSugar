@@ -22,6 +22,8 @@ describe('loadEnv', () => {
       APP_VERSION: '0.0.0',
       TRUST_PROXY: 0,
       OTP_PROVIDER: 'console',
+      SHIPPING_PROVIDER: 'stub',
+      SHIPROCKET_API_BASE: 'https://apiv2.shiprocket.in/v1/external',
     });
   });
 
@@ -57,8 +59,28 @@ describe('loadEnv', () => {
     expect(message).toContain('must all be different');
   });
 
-  it('refuses the console OTP provider in production', () => {
+  it('refuses the console OTP provider and stub shipping in production', () => {
     const { message } = errorFrom(() => loadEnv({ ...valid, NODE_ENV: 'production' }));
     expect(message).toContain('OTP_PROVIDER');
+    expect(message).toContain('SHIPPING_PROVIDER');
+  });
+
+  it('requires Shiprocket credentials and pickup PIN when using Shiprocket', () => {
+    const { message } = errorFrom(() => loadEnv({ ...valid, SHIPPING_PROVIDER: 'shiprocket' }));
+    for (const name of [
+      'SHIPROCKET_API_EMAIL',
+      'SHIPROCKET_API_PASSWORD',
+      'SHIPROCKET_PICKUP_PINCODE',
+    ]) {
+      expect(message).toContain(name);
+    }
+    const env = loadEnv({
+      ...valid,
+      SHIPPING_PROVIDER: 'shiprocket',
+      SHIPROCKET_API_EMAIL: 'api@example.com',
+      SHIPROCKET_API_PASSWORD: 'pw',
+      SHIPROCKET_PICKUP_PINCODE: '400001',
+    });
+    expect(env.SHIPPING_PROVIDER).toBe('shiprocket');
   });
 });

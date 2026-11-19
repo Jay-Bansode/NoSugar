@@ -27,6 +27,19 @@ export const envSchema = z
     OTP_PROVIDER: z.enum(['console']).default('console'),
     /** Public base URL for product media (S3 + CDN). Until the CDN exists, paths stay relative. */
     CDN_BASE_URL: z.url({ protocol: /^https?$/ }).optional(),
+    /** "stub" answers delivery checks locally (development only); "shiprocket" calls the API. */
+    SHIPPING_PROVIDER: z.enum(['stub', 'shiprocket']).default('stub'),
+    SHIPROCKET_API_BASE: z
+      .url({ protocol: /^https$/ })
+      .default('https://apiv2.shiprocket.in/v1/external'),
+    /** Dedicated Shiprocket API user, not the main login (CLAUDE.md §9). */
+    SHIPROCKET_API_EMAIL: z.email().optional(),
+    SHIPROCKET_API_PASSWORD: z.string().min(1).optional(),
+    /** Warehouse PIN code: serviceability is checked from here. */
+    SHIPROCKET_PICKUP_PINCODE: z
+      .string()
+      .regex(/^[1-9][0-9]{5}$/)
+      .optional(),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production' && env.OTP_PROVIDER === 'console') {
@@ -35,6 +48,28 @@ export const envSchema = z
         path: ['OTP_PROVIDER'],
         message: 'the console OTP provider is for development only; configure a real provider',
       });
+    }
+    if (env.NODE_ENV === 'production' && env.SHIPPING_PROVIDER === 'stub') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['SHIPPING_PROVIDER'],
+        message: 'the stub shipping provider is for development only; use "shiprocket"',
+      });
+    }
+    if (env.SHIPPING_PROVIDER === 'shiprocket') {
+      for (const key of [
+        'SHIPROCKET_API_EMAIL',
+        'SHIPROCKET_API_PASSWORD',
+        'SHIPROCKET_PICKUP_PINCODE',
+      ] as const) {
+        if (!env[key]) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [key],
+            message: 'required when SHIPPING_PROVIDER=shiprocket',
+          });
+        }
+      }
     }
     const secrets = [env.JWT_ACCESS_SECRET, env.JWT_REFRESH_SECRET, env.OTP_SECRET];
     if (new Set(secrets).size !== secrets.length) {

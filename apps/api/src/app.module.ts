@@ -8,6 +8,7 @@ import { ENV, type Env } from './config/env.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { CartModule } from './modules/cart/cart.module.js';
 import { CatalogModule } from './modules/catalog/catalog.module.js';
+import { FulfilmentModule } from './modules/fulfilment/fulfilment.module.js';
 import { PricingModule } from './modules/pricing/pricing.module.js';
 import { SettingsModule } from './settings/settings.service.js';
 import { HealthModule } from './modules/health/health.module.js';
@@ -61,6 +62,7 @@ export class AppModule {
         CatalogModule,
         PricingModule,
         CartModule,
+        FulfilmentModule,
         HealthModule,
       ],
       providers: [{ provide: APP_FILTER, useClass: HttpExceptionFilter }],

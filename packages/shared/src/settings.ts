@@ -9,6 +9,8 @@ export const settingsSchema = z.object({
   'shipping.free_threshold_paise': z.number().int().nonnegative(),
   /** Shipping fee below the free-shipping threshold. */
   'shipping.flat_fee_paise': z.number().int().nonnegative(),
+  /** Days to dispatch, added to the courier's delivery estimate (CLAUDE.md §1: within 24 h). */
+  'shipping.dispatch_days': z.number().int().min(0).max(7),
   /** Cash on Delivery fee (non-refundable). */
   'cod.fee_paise': z.number().int().nonnegative(),
   'cod.enabled': z.boolean(),
@@ -30,6 +32,7 @@ export type SettingKey = keyof Settings;
 export const DEFAULT_SETTINGS: Settings = {
   'shipping.free_threshold_paise': 39900,
   'shipping.flat_fee_paise': 9900,
+  'shipping.dispatch_days': 1,
   'cod.fee_paise': 4900,
   'cod.enabled': true,
   'checkout.reservation_minutes': 30,
