@@ -6,6 +6,8 @@ import { Controller, Get, HttpCode, Post } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import {
+  ADMIN_CLIENT_HEADER,
+  ADMIN_CLIENT_VALUE,
   type AdminLoginChallenge,
   adminLoginChallengeSchema,
   type AdminRole,
@@ -81,7 +83,11 @@ async function createAdmin(role: AdminRole, enrolled = true): Promise<TestAdmin>
 }
 
 const ip = () => `10.${randomInt(0, 255)}.${randomInt(0, 255)}.${randomInt(1, 254)}`;
-const post = (path: string) => request(app.getHttpServer()).post(path).set('X-Forwarded-For', ip());
+const post = (path: string) =>
+  request(app.getHttpServer())
+    .post(path)
+    .set('X-Forwarded-For', ip())
+    .set(ADMIN_CLIENT_HEADER, ADMIN_CLIENT_VALUE);
 const get = (path: string, token?: string) => {
   const r = request(app.getHttpServer()).get(path).set('X-Forwarded-For', ip());
   return token ? r.set('Authorization', `Bearer ${token}`) : r;
@@ -198,6 +204,20 @@ describe('first sign-in sets up the authenticator app', () => {
     // From now on it asks for a code, without a new key.
     const again = adminLoginChallengeSchema.parse((await login(admin.email).expect(200)).body);
     expect(again).toMatchObject({ next: 'verify', enrolment: null });
+  });
+});
+
+describe('cross-site protection', () => {
+  it('refuses sign-in requests without the admin client header', async () => {
+    const admin = await createAdmin('support');
+    for (const path of ['login', 'totp', 'refresh', 'logout']) {
+      const res = await request(app.getHttpServer())
+        .post(`/v1/admin/auth/${path}`)
+        .set('X-Forwarded-For', ip())
+        .send({ email: admin.email, password: PASSWORD })
+        .expect(403);
+      expect(code(res)).toBe('FORBIDDEN');
+    }
   });
 });
 

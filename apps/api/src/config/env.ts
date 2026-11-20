@@ -33,6 +33,11 @@ export const envSchema = z
         (v) => /^[A-Za-z0-9+/]+={0,2}$/.test(v) && Buffer.from(v, 'base64').length === 32,
         'must be 32 random bytes, base64-encoded (openssl rand -base64 32)',
       ),
+    /**
+     * Admin panel origin, e.g. https://admin.example.in. The only origin allowed to call the
+     * API from a browser with credentials (CORS). Required in production, where it must be https.
+     */
+    ADMIN_URL: z.url({ protocol: /^https?$/ }).optional(),
     /** Only "console" exists until the SMS/WhatsApp provider is chosen (CLAUDE.md §11). */
     OTP_PROVIDER: z.enum(['console']).default('console'),
     /** Public base URL for product media (S3 + CDN). Until the CDN exists, paths stay relative. */
@@ -130,6 +135,13 @@ export const envSchema = z
           });
         }
       }
+    }
+    if (env.NODE_ENV === 'production' && !env.ADMIN_URL?.startsWith('https://')) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['ADMIN_URL'],
+        message: 'required in production, as an https:// URL (the admin panel origin)',
+      });
     }
     if (env.NODE_ENV === 'production') {
       for (const key of [

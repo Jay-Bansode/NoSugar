@@ -20,6 +20,7 @@ describe('API (e2e, no dependencies)', () => {
       DATABASE_URL: 'postgresql://brand:brand@127.0.0.1:1/brand',
       REDIS_URL: 'redis://127.0.0.1:1',
       JOBS_ENABLED: 'false',
+      ADMIN_URL: 'http://localhost:3002',
     });
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule.forRoot(env)],
@@ -38,6 +39,24 @@ describe('API (e2e, no dependencies)', () => {
     const res = await request(app.getHttpServer()).get('/v1/health').expect(200);
     expect(res.body).toMatchObject({ status: 'ok', version: '9.9.9' });
     expect(new Date(res.body.time).toISOString()).toBe(res.body.time);
+  });
+
+  it('allows CORS with credentials from the admin panel only', async () => {
+    const ok = await request(app.getHttpServer())
+      .options('/v1/admin/auth/login')
+      .set('Origin', 'http://localhost:3002')
+      .set('Access-Control-Request-Method', 'POST')
+      .set('Access-Control-Request-Headers', 'content-type,x-requested-with')
+      .expect(204);
+    expect(ok.headers['access-control-allow-origin']).toBe('http://localhost:3002');
+    expect(ok.headers['access-control-allow-credentials']).toBe('true');
+    expect(String(ok.headers['access-control-allow-headers'])).toMatch(/X-Requested-With/i);
+
+    const other = await request(app.getHttpServer())
+      .options('/v1/admin/auth/login')
+      .set('Origin', 'https://evil.example')
+      .set('Access-Control-Request-Method', 'POST');
+    expect(other.headers['access-control-allow-origin']).toBeUndefined();
   });
 
   it('does not send X-Powered-By', async () => {

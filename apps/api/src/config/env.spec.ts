@@ -91,6 +91,18 @@ describe('loadEnv', () => {
     }
   });
 
+  it('requires an https admin panel URL in production', () => {
+    const { message } = errorFrom(() => loadEnv({ ...valid, NODE_ENV: 'production' }));
+    expect(message).toContain('ADMIN_URL: required in production');
+    const http = errorFrom(() =>
+      loadEnv({ ...valid, NODE_ENV: 'production', ADMIN_URL: 'http://admin.example.in' }),
+    ).message;
+    expect(http).toContain('ADMIN_URL');
+    expect(loadEnv({ ...valid, ADMIN_URL: 'http://localhost:3002' }).ADMIN_URL).toBe(
+      'http://localhost:3002',
+    );
+  });
+
   it('requires the seller details for invoices in production', () => {
     const { message } = errorFrom(() => loadEnv({ ...valid, NODE_ENV: 'production' }));
     for (const name of [

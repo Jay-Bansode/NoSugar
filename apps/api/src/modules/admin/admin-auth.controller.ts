@@ -1,5 +1,22 @@
-import { Body, Get, Header, HttpCode, Inject, Post, Req, Res, Controller } from '@nestjs/common';
 import {
+  Body,
+  type CanActivate,
+  Controller,
+  type ExecutionContext,
+  Get,
+  Header,
+  HttpCode,
+  HttpStatus,
+  Inject,
+  Injectable,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ADMIN_CLIENT_HEADER,
+  ADMIN_CLIENT_VALUE,
   type AdminChangePassword,
   adminChangePasswordSchema,
   type AdminLogin,
@@ -9,8 +26,10 @@ import {
   type AdminTokens,
   type AdminTotp,
   adminTotpSchema,
+  ErrorCode,
 } from '@brand/shared';
 import type { CookieOptions, Request, Response } from 'express';
+import { AppException } from '../../common/app.exception.js';
 import { ZodValidationPipe } from '../../common/zod-validation.pipe.js';
 import { ENV, type Env } from '../../config/env.js';
 import { Public } from '../auth/auth.guard.js';
@@ -26,11 +45,28 @@ import { AdminAuthService, type AdminSignedIn } from './admin-auth.service.js';
 import type { AdminSessionMeta } from './admin-session.service.js';
 
 /**
+ * Requires the admin client header. Browsers only send a custom header cross-origin after a
+ * CORS preflight, which the API grants to ADMIN_URL alone: so no other site can trigger the
+ * cookie-based refresh or sign-out, even from a same-site subdomain.
+ */
+@Injectable()
+export class AdminClientHeaderGuard implements CanActivate {
+  canActivate(context: ExecutionContext): boolean {
+    const req = context.switchToHttp().getRequest<Request>();
+    if (req.get(ADMIN_CLIENT_HEADER) !== ADMIN_CLIENT_VALUE) {
+      throw new AppException(ErrorCode.FORBIDDEN, 'Not allowed.', HttpStatus.FORBIDDEN);
+    }
+    return true;
+  }
+}
+
+/**
  * Admin sign-in. The admin panel is web-only, so the refresh token lives only in an httpOnly,
  * SameSite=Strict cookie scoped to these endpoints; the access token is returned in the body.
  */
 @Controller('admin/auth')
 @Public()
+@UseGuards(AdminClientHeaderGuard)
 export class AdminAuthController {
   constructor(
     private readonly auth: AdminAuthService,

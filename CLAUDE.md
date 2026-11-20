@@ -5,7 +5,7 @@
 - **Brand name:** TBD (use `brand` / `Brand` as placeholders in code)
 - **Market:** India only (INR, GST, Hindi/English users, UPI-first, Cash on Delivery)
 - **Last updated:** 2026-11-19
-- **Current phase:** Phase 1 – Core API: slices 1 (schema, migration, seed), 2 (OTP auth), 3 (catalog), 4 (pricing), 5 (cart), 6 (serviceability, against a stand-in until the Shiprocket account exists), 7 (checkout and orders), 8 (Razorpay payments, webhooks, refunds; against a fake gateway until test keys exist) and 9 (GST invoices and credit notes; placeholder seller details until GSTIN/FSSAI exist) done, so the Phase 1 code is complete. Phase 2 – Admin panel: slice 1 (admin sign-in with password + authenticator app, roles, audit log; API) done; next slice 2 (admin app foundation). Phase 0 non-code items (accounts, GST/FSSAI, Figma) still pending (update this line as work progresses)
+- **Current phase:** Phase 1 – Core API: slices 1 (schema, migration, seed), 2 (OTP auth), 3 (catalog), 4 (pricing), 5 (cart), 6 (serviceability, against a stand-in until the Shiprocket account exists), 7 (checkout and orders), 8 (Razorpay payments, webhooks, refunds; against a fake gateway until test keys exist) and 9 (GST invoices and credit notes; placeholder seller details until GSTIN/FSSAI exist) done, so the Phase 1 code is complete. Phase 2 – Admin panel: slices 1 (admin sign-in with password + authenticator app, roles, audit log; API) and 2 (admin app foundation: `apps/admin`, `packages/api-client`, sign-in, layout) done; next slice 3 (orders + refunds). Phase 0 non-code items (accounts, GST/FSSAI, Figma) still pending (update this line as work progresses)
 
 ---
 
@@ -242,7 +242,7 @@ Every transition writes a row to `order_events` (or the equivalent events table)
 
 ### Admin endpoints
 
-All under `/v1/admin`, admin access token required (never a customer token), roles checked per controller (`@AdminController(path, roles)`); every change writes `audit_log`.
+All under `/v1/admin`, admin access token required (never a customer token), roles checked per controller (`@AdminController(path, roles)`); every change writes `audit_log`. The `/v1/admin/auth/*` endpoints also require `X-Requested-With: brand-admin`. Browsers may call the API with credentials only from `ADMIN_URL` (CORS). Clients use `createAdminApi` from `packages/api-client`.
 
 | Method & path                                                                                              | Purpose                                                                                                     |
 | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
@@ -326,6 +326,7 @@ JWT_REFRESH_SECRET=          # HMAC key for stored refresh-token hashes
 OTP_SECRET=                  # HMAC key for stored OTP hashes (all four secrets must differ)
 ADMIN_JWT_SECRET=            # admin access/sign-in tokens and refresh-token HMACs (keys derived per purpose)
 ADMIN_TOTP_KEY=              # 32 random bytes, base64 (openssl rand -base64 32): encrypts admins' authenticator keys
+ADMIN_URL=                   # admin panel origin; the only CORS origin allowed (https, required in production)
 OTP_PROVIDER=                # "console" (dev only) until the SMS/WhatsApp provider is chosen
 TRUST_PROXY=                 # number of proxies in front of the API; decides client IP for rate limits
 RAZORPAY_KEY_ID=
@@ -357,6 +358,8 @@ SELLER_LEGAL_NAME=
 SELLER_ADDRESS=              # registered address, one line
 FSSAI_LICENSE_NO=            # 14 digits
 ```
+
+Admin (`apps/admin`) uses only `NEXT_PUBLIC_API_URL`, built into the JavaScript at `next build` time (see `apps/admin/.env.example`).
 
 Mobile (`apps/mobile`) uses only public values: `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_RAZORPAY_KEY_ID`, `EXPO_PUBLIC_SENTRY_DSN`. Never put a secret in a client app.
 
@@ -466,6 +469,11 @@ Record decisions here (or as ADRs in `docs/adr/`) so every AI tool and teammate 
 | 2026-11-21 | Roles are a fixed enum (`owner`, `operations`, `support`) with permissions in code, instead of a `roles` table                                                                                                                               | Three fixed roles; a table adds nothing until custom roles are needed                                                                             |
 | 2026-11-21 | `audit_log` is append-only (trigger); `AuditService.record` runs in the change's transaction; an interceptor fails any admin change that wrote no audit record (logged only in production)                                                   | CLAUDE.md §8 "every action in audit_log", enforced rather than remembered                                                                         |
 | 2026-11-21 | No 2FA recovery codes; a lost phone or lockout is fixed by an owner with the command line (`admin reset-2fa` / `unlock` / `reset-password`), which is audited                                                                                | Small team; fewer secrets to manage. Owner screens for this come in slice 8                                                                       |
+| 2026-11-21 | Admin app: Next.js 16 (App Router) + React 19 + Tailwind 4 + shadcn/ui (components copied into `apps/admin/components/ui`); client-rendered pages behind sign-in, port 3002; `qrcode` for the authenticator QR code                          | CLAUDE.md §3 stack; every page needs the session, which only exists in the browser                                                                |
+| 2026-11-21 | `packages/api-client`: one typed `fetch` client for all apps; validates responses with the shared Zod schemas, throws `ApiError` with the API's error code, refreshes once on a 401 (shared between concurrent requests)                     | Same contract for admin, website and apps; a changed API response fails loudly instead of silently                                                |
+| 2026-11-21 | Admin access token kept in memory only (never localStorage); refreshes in all tabs take turns under a Web Lock, and sign-out is broadcast to other tabs                                                                                      | Two tabs refreshing with the same cookie at once would trip refresh-token reuse detection and end the session                                     |
+| 2026-11-21 | CORS: only `ADMIN_URL`, with credentials; admin auth endpoints require `X-Requested-With: brand-admin`, which forces a preflight                                                                                                             | Other sites (even same-site subdomains) can't trigger the cookie-based refresh or sign-out                                                        |
+| 2026-11-21 | Admin security headers: CSP (API origin only in `connect-src`, `frame-ancestors 'none'`), `X-Frame-Options: DENY`, `no-referrer`, `noindex`. Scripts still allow `'unsafe-inline'` (Next.js needs nonces otherwise)                          | Switch to nonce-based CSP when the panel is hosted                                                                                                |
 
 ---
 

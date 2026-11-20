@@ -1,0 +1,10 @@
+{
+  "extends": "@brand/config/tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    // fetch, Response and Headers: runs in browsers, React Native and Node 18+.
+    "lib": ["ES2022", "DOM", "DOM.Iterable"]
+  },
+  "include": ["src"]
+}

@@ -8,6 +8,13 @@ export const ADMIN_ROLES = ['owner', 'operations', 'support'] as const;
 export const adminRoleSchema = z.enum(ADMIN_ROLES);
 export type AdminRole = z.infer<typeof adminRoleSchema>;
 
+/**
+ * Every admin auth request must carry this header. A custom header makes browsers send a
+ * CORS preflight, so pages on other origins can't fire requests at the cookie endpoints.
+ */
+export const ADMIN_CLIENT_HEADER = 'X-Requested-With';
+export const ADMIN_CLIENT_VALUE = 'brand-admin';
+
 export const ADMIN_PASSWORD_MIN = 12;
 export const ADMIN_PASSWORD_MAX = 128;
 export const TOTP_DIGITS = 6;
