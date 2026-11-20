@@ -18,7 +18,7 @@ importers:
         specifier: ^2.11.13
         version: 2.11.13
       typescript:
-        specifier: ^5.9.3
+        specifier: ~5.9.3
         version: 5.9.3
 
   apps/api:
