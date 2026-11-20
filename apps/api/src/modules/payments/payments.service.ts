@@ -4,6 +4,7 @@ import { AppException } from '../../common/app.exception.js';
 import type { OrderEventActor } from '../../generated/prisma/client.js';
 import { JobsService } from '../../jobs/jobs.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { InvoicingService } from '../invoicing/invoicing.service.js';
 import { ISSUE_REFUND_JOB, OrdersService } from '../orders/orders.service.js';
 import { PAYMENT_GATEWAY, type PaymentGateway, PaymentGatewayError } from './gateway.js';
 
@@ -33,6 +34,7 @@ export class PaymentsService implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly orders: OrdersService,
     private readonly jobs: JobsService,
+    private readonly invoicing: InvoicingService,
     @Inject(PAYMENT_GATEWAY) private readonly gateway: PaymentGateway,
   ) {}
 
@@ -148,7 +150,7 @@ export class PaymentsService implements OnModuleInit {
    * order that has meanwhile expired is refunded automatically.
    */
   async confirmCaptured(captured: CapturedPayment): Promise<CaptureOutcome> {
-    const { outcome, refundId } = await this.prisma.$transaction(async (tx) => {
+    const { outcome, refundId, confirmedOrderId } = await this.prisma.$transaction(async (tx) => {
       const payment = await tx.payment.findUnique({
         where: { razorpayOrderId: captured.razorpayOrderId },
       });
@@ -163,7 +165,7 @@ export class PaymentsService implements OnModuleInit {
         this.logger.error(
           `Captured amount does not match order (orderId=${order.id}, paymentId=${captured.razorpayPaymentId})`,
         );
-        return { outcome: 'amount_mismatch' as const, refundId: null };
+        return { outcome: 'amount_mismatch' as const, refundId: null, confirmedOrderId: null };
       }
 
       await tx.payment.update({
@@ -184,7 +186,7 @@ export class PaymentsService implements OnModuleInit {
           actorRef: captured.actorRef ?? captured.razorpayPaymentId,
           metadata: { razorpayPaymentId: captured.razorpayPaymentId },
         });
-        return { outcome: 'confirmed' as const, refundId: null };
+        return { outcome: 'confirmed' as const, refundId: null, confirmedOrderId: order.id };
       }
       if (order.status === 'cancelled') {
         // Paid after the order expired: stock was released, so give the money back.
@@ -195,11 +197,12 @@ export class PaymentsService implements OnModuleInit {
           'system',
         );
         this.logger.warn(`Late payment on cancelled order; refunding (orderId=${order.id})`);
-        return { outcome: 'refunded_late' as const, refundId };
+        return { outcome: 'refunded_late' as const, refundId, confirmedOrderId: null };
       }
-      return { outcome: 'already_confirmed' as const, refundId: null };
+      return { outcome: 'already_confirmed' as const, refundId: null, confirmedOrderId: null };
     });
     if (refundId) await this.jobs.enqueue(ISSUE_REFUND_JOB, { refundId }, `refund-${refundId}`);
+    if (confirmedOrderId) await this.invoicing.queueInvoice(confirmedOrderId);
     return outcome;
   }
 

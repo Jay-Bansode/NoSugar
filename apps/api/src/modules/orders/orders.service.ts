@@ -15,6 +15,7 @@ import { ENV, type Env } from '../../config/env.js';
 import type { OrderEventActor, Prisma } from '../../generated/prisma/client.js';
 import { JobsService } from '../../jobs/jobs.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { InvoicingService } from '../invoicing/invoicing.service.js';
 import { FAKE_KEY_ID } from '../payments/fake.gateway.js';
 import { orderDemand, type StockEffect, stockEffect } from './order-stock.js';
 
@@ -36,6 +37,7 @@ const DETAIL_INCLUDE = {
   events: { orderBy: { id: 'asc' } },
   payments: { orderBy: { createdAt: 'desc' } },
   refunds: { orderBy: { createdAt: 'desc' }, take: 1 },
+  invoice: { include: { creditNotes: { orderBy: { issuedAt: 'asc' } } } },
 } satisfies Prisma.OrderInclude;
 
 type OrderWithDetail = Prisma.OrderGetPayload<{ include: typeof DETAIL_INCLUDE }>;
@@ -55,6 +57,7 @@ export class OrdersService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jobs: JobsService,
+    private readonly invoicing: InvoicingService,
     @Inject(ENV) env: Env,
   ) {
     this.paymentKeyId =
@@ -99,6 +102,17 @@ export class OrdersService implements OnModuleInit {
     if (to === 'cancelled') {
       // A cancelled order no longer uses up a discount code.
       await tx.discountRedemption.deleteMany({ where: { orderId } });
+    }
+    if (to === 'cancelled' || to === 'returned') {
+      // The supply didn't happen (or came back): reverse whatever is left on the invoice.
+      // Partial refunds of delivered orders issue their own credit note for the amount.
+      await this.invoicing.issueCreditNote(tx, orderId, {
+        amountPaise: 'remaining',
+        reason:
+          to === 'returned'
+            ? 'Goods returned'
+            : `Order cancelled${ctx.note ? ` (${ctx.note})` : ''}`,
+      });
     }
     await tx.order.update({
       where: { id: orderId },
@@ -149,6 +163,17 @@ export class OrdersService implements OnModuleInit {
 
   async detail(customerId: string, number: string): Promise<OrderDetail> {
     return this.toDetail(await this.findOwn(customerId, number));
+  }
+
+  /** The id of the customer's order, or 404 (also for other customers' orders). */
+  async ownOrderId(customerId: string, number: string): Promise<string> {
+    const order = await this.prisma.order.findFirst({
+      where: { number, customerId },
+      select: { id: true },
+    });
+    if (!order)
+      throw new AppException(ErrorCode.NOT_FOUND, 'Order not found', HttpStatus.NOT_FOUND);
+    return order.id;
   }
 
   async detailById(orderId: string): Promise<OrderDetail> {
@@ -296,6 +321,19 @@ export class OrdersService implements OnModuleInit {
       refund: order.refunds[0]
         ? { status: order.refunds[0].status, amountPaise: order.refunds[0].amountPaise }
         : null,
+      invoice: order.invoice
+        ? {
+            number: order.invoice.number,
+            issuedAt: order.invoice.issuedAt.toISOString(),
+            totalPaise: order.invoice.totalPaise,
+          }
+        : null,
+      creditNotes: (order.invoice?.creditNotes ?? []).map((c) => ({
+        id: c.id,
+        number: c.number,
+        issuedAt: c.issuedAt.toISOString(),
+        totalPaise: c.totalPaise,
+      })),
     };
   }
 

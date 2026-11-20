@@ -53,12 +53,20 @@ export function stateName(code: string): string | null {
   return INDIAN_STATES.find((s) => s.code === code)?.name ?? null;
 }
 
-const text = (max: number) => z.string().trim().min(1).max(max);
+/**
+ * Courier labels and GST invoices are printed in English, so address text is limited to
+ * Latin letters, digits and common punctuation (no Devanagari or emoji).
+ */
+const LATIN_TEXT = /^[\x20-\x7E\u00A0-\u00FF\u2018\u2019\u201C\u201D\u2013\u2014]*$/;
+const LATIN_MESSAGE = 'Please use English letters';
+
+const text = (max: number) => z.string().trim().min(1).max(max).regex(LATIN_TEXT, LATIN_MESSAGE);
 const optionalText = (max: number) =>
   z
     .string()
     .trim()
     .max(max)
+    .regex(LATIN_TEXT, LATIN_MESSAGE)
     .transform((v) => (v === '' ? null : v))
     .nullish()
     .transform((v) => v ?? null);

@@ -5,7 +5,7 @@
 - **Brand name:** TBD (use `brand` / `Brand` as placeholders in code)
 - **Market:** India only (INR, GST, Hindi/English users, UPI-first, Cash on Delivery)
 - **Last updated:** 2026-11-19
-- **Current phase:** Phase 1 – Core API: slices 1 (schema, migration, seed), 2 (OTP auth), 3 (catalog), 4 (pricing), 5 (cart), 6 (serviceability, against a stand-in until the Shiprocket account exists), 7 (checkout and orders) and 8 (Razorpay payments, webhooks, refunds; against a fake gateway until test keys exist) done; next slice 9 (GST invoices). Phase 0 non-code items (accounts, GST/FSSAI, Figma) still pending (update this line as work progresses)
+- **Current phase:** Phase 1 – Core API: slices 1 (schema, migration, seed), 2 (OTP auth), 3 (catalog), 4 (pricing), 5 (cart), 6 (serviceability, against a stand-in until the Shiprocket account exists), 7 (checkout and orders), 8 (Razorpay payments, webhooks, refunds; against a fake gateway until test keys exist) and 9 (GST invoices and credit notes; placeholder seller details until GSTIN/FSSAI exist) done, so the Phase 1 code is complete; next Phase 2 (admin panel). Phase 0 non-code items (accounts, GST/FSSAI, Figma) still pending (update this line as work progresses)
 
 ---
 
@@ -231,7 +231,7 @@ Every transition writes a row to `order_events` (or the equivalent events table)
 | `POST /v1/checkout`                                                                             | Create order from the cart (login + `Idempotency-Key` required); prepaid orders get a Razorpay order (`payment` in the response) |
 | `POST /v1/payments/verify`                                                                      | Verify Razorpay signature, then confirm with Razorpay's own record (order, amount, captured)                                     |
 | `GET /v1/orders` · `GET /v1/orders/:number` · `POST /v1/orders/:number/cancel`                  | Orders                                                                                                                           |
-| `GET /v1/orders/:number/invoice`                                                                | Invoice PDF                                                                                                                      |
+| `GET /v1/orders/:number/invoice` · `GET /v1/orders/:number/credit-notes/:id`                    | Invoice and credit note PDFs (the order detail lists them; 404 `INVOICE_NOT_AVAILABLE` until the invoice is issued)              |
 | `GET /v1/wallet`                                                                                | Balance, expiry, ledger                                                                                                          |
 | `POST /v1/trial/refund-request`                                                                 | 48-hour trial refund                                                                                                             |
 | `POST /v1/reviews`                                                                              | Submit review (verified buyers)                                                                                                  |
@@ -339,9 +339,11 @@ S3_ACCESS_KEY_ID=
 S3_SECRET_ACCESS_KEY=
 CDN_BASE_URL=
 SENTRY_DSN=
-SELLER_GSTIN=
-SELLER_STATE_CODE=
-FSSAI_LICENSE_NO=
+SELLER_GSTIN=                # printed on invoices; these five are required in production
+SELLER_STATE_CODE=           # GST state code, must match the GSTIN's first two digits
+SELLER_LEGAL_NAME=
+SELLER_ADDRESS=              # registered address, one line
+FSSAI_LICENSE_NO=            # 14 digits
 ```
 
 Mobile (`apps/mobile`) uses only public values: `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_RAZORPAY_KEY_ID`, `EXPO_PUBLIC_SENTRY_DSN`. Never put a secret in a client app.
@@ -384,7 +386,8 @@ Owner-facing list with deadlines, options and placeholders in use: [`docs/pendin
 - [ ] Bot protection on `POST /v1/auth/otp` (§6 Login): needs a CAPTCHA provider, e.g. Cloudflare Turnstile or hCaptcha. Rate limits are in place meanwhile.
 - [ ] Subscriptions (repeat delivery) in v1 or later
 - [ ] Final GST rate and HSN code per product (confirm with CA)
-- [ ] Invoice number format (confirm with CA)
+- [ ] Invoice number format (confirm with CA; placeholder `INV/26-27/000001`, kept within GST's 16-character limit)
+- [ ] When the invoice is issued: on confirmation (current, per §6) or on dispatch (confirm with CA)
 - [ ] Hosting provider and region
 
 ## 12. Decision log
@@ -436,6 +439,14 @@ Record decisions here (or as ADRs in `docs/adr/`) so every AI tool and teammate 
 | 2026-11-20 | Webhooks: HMAC over the raw body (`rawBody: true`), stored in `webhook_events` keyed by `X-Razorpay-Event-Id`, queued with a job id per event, processed idempotently; unknown events stored and marked processed                            | CLAUDE.md §7 rules; duplicates and retries are harmless                                                                                           |
 | 2026-11-20 | A payment captured after its order expired is refunded automatically; the order stays cancelled                                                                                                                                              | Its stock was already released                                                                                                                    |
 | 2026-11-20 | Refunds are tagged with our refund id (`notes.refund_ref`); a retry first looks for an existing refund with that tag                                                                                                                         | Razorpay has no idempotency key for refunds; this prevents double refunds                                                                         |
+| 2026-11-20 | Invoices are issued by a background job once an order is confirmed (prepaid paid, COD placed), plus a sweep every 5 minutes for any missed; cancelled or returned orders get a credit note for whatever is still uncredited                  | Follows §6 step 7; confirmation never fails because of invoicing. Issue-at-dispatch is an open question for the CA (§11)                          |
+| 2026-11-20 | Invoice and credit note numbers come from a per-financial-year `invoice_series` row locked in the issuing transaction; placeholder format `INV/26-27/000001` and `CN/26-27/000001` (16-character GST limit)                                  | Gapless and sequential even under concurrency or rollback; proven in `test:db`                                                                    |
+| 2026-11-20 | Invoices and credit notes store immutable snapshots (seller, buyer, lines); a trigger blocks UPDATE/DELETE except `pdf_key`; `invoice_series` can only move forward                                                                          | Tax documents must never change after issue                                                                                                       |
+| 2026-11-20 | Invoice lines: one per order line after its discount share, plus shipping and COD fee at the highest-rate line's rate and HSN; CGST/SGST split per line (odd paisa to SGST)                                                                  | Totals match the order exactly; charges follow the main supply (pending CA, docs/pending-decisions.md #24)                                        |
+| 2026-11-20 | Partial credit notes spread the amount over lines by what is left on each and work tax back out per line; a line credited in full takes exactly its remaining amounts                                                                        | Credit notes never exceed the invoice and add up to it exactly; pure function in `packages/shared/src/invoice.ts`                                 |
+| 2026-11-20 | PDFs are rendered on request from the snapshot by a small built-in writer (standard Helvetica, "Rs." since the base fonts have no ₹); no PDF library, no S3 yet. Non-production PDFs are stamped SPECIMEN                                    | No new dependency; deterministic output. Swap in a library with embedded fonts if branded invoices are wanted                                     |
+| 2026-11-20 | Delivery address text must use English letters (Latin-1 plus common punctuation)                                                                                                                                                             | Invoices and courier labels are printed in English; the PDF fonts can't show Devanagari                                                           |
+| 2026-11-20 | pnpm override `effect@<3.22.1` → `^3.22.1`                                                                                                                                                                                                   | High-severity ReDoS advisory in a Prisma CLI dependency; patch-level bump keeps CI's audit green until Prisma updates                             |
 
 ---
 

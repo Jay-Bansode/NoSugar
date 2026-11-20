@@ -22,6 +22,7 @@ import { TokenService } from '../src/modules/auth/token.service.js';
 import { OrdersService } from '../src/modules/orders/orders.service.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { TEST_ENV } from './helpers/env.js';
+import { deleteTestOrders } from './helpers/orders.js';
 
 const run = randomUUID().slice(0, 8).toUpperCase();
 let app: NestExpressApplication;
@@ -166,23 +167,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  // order_events is append-only by trigger; test cleanup disables triggers for this
-  // transaction only (session_replication_role resets when it ends).
-  await prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SET LOCAL session_replication_role = replica`;
-    const orders = await tx.order.findMany({
-      where: { customerId: { in: f.userIds } },
-      select: { id: true },
-    });
-    const orderIds = orders.map((o) => o.id);
-    // Triggers (and so foreign keys) are off here: delete every child table explicitly.
-    await tx.refund.deleteMany({ where: { orderId: { in: orderIds } } });
-    await tx.payment.deleteMany({ where: { orderId: { in: orderIds } } });
-    await tx.orderEvent.deleteMany({ where: { orderId: { in: orderIds } } });
-    await tx.discountRedemption.deleteMany({ where: { orderId: { in: orderIds } } });
-    await tx.orderItem.deleteMany({ where: { orderId: { in: orderIds } } });
-    await tx.order.deleteMany({ where: { id: { in: orderIds } } });
-  });
+  await deleteTestOrders(prisma, f.userIds);
   await prisma.cart.deleteMany({ where: { userId: { in: f.userIds } } });
   await prisma.address.deleteMany({ where: { userId: { in: f.userIds } } });
   await prisma.user.deleteMany({ where: { id: { in: f.userIds } } });

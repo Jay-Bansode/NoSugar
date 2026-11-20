@@ -36,6 +36,8 @@ export const ErrorCode = {
   /** Bad signature, or Razorpay's record doesn't match the order (amount, order id, status). */
   PAYMENT_VERIFICATION_FAILED: 'PAYMENT_VERIFICATION_FAILED',
   WEBHOOK_SIGNATURE_INVALID: 'WEBHOOK_SIGNATURE_INVALID',
+  /** The order has no invoice (yet): it is issued shortly after confirmation. */
+  INVOICE_NOT_AVAILABLE: 'INVOICE_NOT_AVAILABLE',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

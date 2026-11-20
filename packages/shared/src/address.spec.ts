@@ -47,6 +47,27 @@ describe('addressInputSchema', () => {
     expect(addressInputSchema.safeParse({ ...valid, [field]: value }).success).toBe(false);
   });
 
+  it('accepts English text with common punctuation and accents', () => {
+    const parsed = addressInputSchema.parse({
+      ...valid,
+      name: 'D’Souza – Zoë',
+      line1: 'Flat #4B, “Sai Kripa”, 2nd Cross (Near Temple)/Main Rd.',
+    });
+    expect(parsed.name).toBe('D’Souza – Zoë');
+  });
+
+  it.each([
+    ['name', 'आशा राव'],
+    ['line1', '12 एमजी रोड'],
+    ['line2', 'Near park 🌳'],
+    ['city', 'पुणे'],
+    ['landmark', 'मंदिर'],
+  ])('asks for English letters in %s', (field, value) => {
+    const result = addressInputSchema.safeParse({ ...valid, [field]: value });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe('Please use English letters');
+  });
+
   it('rejects unknown fields', () => {
     expect(addressInputSchema.safeParse({ ...valid, gstin: 'x' }).success).toBe(false);
   });

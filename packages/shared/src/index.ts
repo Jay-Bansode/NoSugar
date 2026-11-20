@@ -13,3 +13,4 @@ export * from './shipping.js';
 export * from './address.js';
 export * from './orders.js';
 export * from './payments.js';
+export * from './invoice.js';

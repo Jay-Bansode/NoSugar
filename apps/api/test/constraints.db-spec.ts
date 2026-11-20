@@ -270,14 +270,44 @@ describe('invoices', () => {
       `INSERT INTO invoice_series (id, kind, financial_year, prefix) VALUES ($1, 'invoice', '2099-00', 'T')`,
       [seriesId],
     );
+    const insert = `INSERT INTO invoices (id, order_id, series_id, sequence, number, seller_gstin,
+         seller_state_code, place_of_supply_code, taxable_value_paise, cgst_paise, sgst_paise,
+         igst_paise, total_paise, seller, buyer, lines)
+       VALUES ($1, $2, $3, 1, $4, 'GSTIN', '27', $5, 10000, $6, $7, $8, $9, '{}', '{}', $10)`;
+    const lines = JSON.stringify([{}]);
     await expectPgError(
-      `INSERT INTO invoices (id, order_id, series_id, sequence, number, seller_gstin, seller_state_code,
-         place_of_supply_code, taxable_value_paise, cgst_paise, sgst_paise, igst_paise, total_paise)
-       VALUES ($1, $2, $3, 1, $4, 'GSTIN', '27', '29', 10000, 250, 250, 500, 11000)`,
-      [randomUUID(), params[0], seriesId, `T/${randomUUID()}`],
+      insert,
+      [randomUUID(), params[0], seriesId, 'T/1', '29', 250, 250, 500, 11000, lines],
       PG.checkViolation,
       'invoices_gst_kind_chk',
     );
+    // CGST + SGST only within the seller's state; IGST only outside it.
+    await expectPgError(
+      insert,
+      [randomUUID(), params[0], seriesId, 'T/1', '29', 250, 250, 0, 10500, lines],
+      PG.checkViolation,
+      'invoices_gst_place_chk',
+    );
+    await expectPgError(
+      insert,
+      [randomUUID(), params[0], seriesId, 'T/1', '27', 0, 0, 500, 10500, lines],
+      PG.checkViolation,
+      'invoices_gst_place_chk',
+    );
+    // GST caps document numbers at 16 characters.
+    await expectPgError(
+      insert,
+      [randomUUID(), params[0], seriesId, 'INV/2026-27/000001', '27', 250, 250, 0, 10500, lines],
+      PG.checkViolation,
+      'invoices_number_format_chk',
+    );
+    await expectPgError(
+      insert,
+      [randomUUID(), params[0], seriesId, 'T/1', '27', 250, 250, 0, 10500, '[]'],
+      PG.checkViolation,
+      'invoices_lines_chk',
+    );
+    await q(insert, [randomUUID(), params[0], seriesId, 'T/1', '27', 250, 250, 0, 10500, lines]);
   });
 });
 

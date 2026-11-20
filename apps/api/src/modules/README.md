@@ -12,7 +12,7 @@ One folder per domain module (CLAUDE.md §4). Each module has `*.module.ts`, `*.
 | `checkout`                       | 1     | done                     |
 | `orders`                         | 1     | done                     |
 | `payments`                       | 1     | done                     |
-| `invoicing`                      | 1     | planned                  |
+| `invoicing`                      | 1     | done                     |
 | `admin`                          | 2     | planned                  |
 | `content`                        | 2     | planned                  |
 | `reviews`                        | 2     | planned                  |

@@ -15,6 +15,7 @@ import { SettingsService } from '../../settings/settings.service.js';
 import { variantDemand } from '../cart/cart-lines.js';
 import { CartService } from '../cart/cart.service.js';
 import { ServiceabilityService } from '../fulfilment/serviceability.service.js';
+import { InvoicingService } from '../invoicing/invoicing.service.js';
 import { applyStock, OrdersService } from '../orders/orders.service.js';
 import { stockEffect } from '../orders/order-stock.js';
 import { PaymentsService } from '../payments/payments.service.js';
@@ -47,6 +48,7 @@ export class CheckoutService {
     private readonly settings: SettingsService,
     private readonly rateLimiter: RateLimiterService,
     private readonly payments: PaymentsService,
+    private readonly invoicing: InvoicingService,
   ) {}
 
   async checkout(
@@ -102,7 +104,10 @@ export class CheckoutService {
     // Prepaid: create the Razorpay order now that ours is committed. If Razorpay is down this
     // throws 503; the order stays reserved and retrying with the same key completes it.
     await this.payments.ensurePayment(orderId);
-    return { order: await this.orders.detailById(orderId), replayed: false };
+    const order = await this.orders.detailById(orderId);
+    // COD (and fully wallet-paid) orders start confirmed, so they are invoiced straight away.
+    if (order.status === 'confirmed') await this.invoicing.queueInvoice(orderId);
+    return { order, replayed: false };
   }
 
   private async placeOrder(

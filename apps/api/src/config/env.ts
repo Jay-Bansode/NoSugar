@@ -1,3 +1,4 @@
+import { stateCodeSchema } from '@brand/shared';
 import { z } from 'zod';
 
 const secret = (name: string) =>
@@ -46,7 +47,24 @@ export const envSchema = z
     RAZORPAY_KEY_ID: z.string().min(1).optional(),
     RAZORPAY_KEY_SECRET: z.string().min(1).optional(),
     RAZORPAY_WEBHOOK_SECRET: z.string().min(1).optional(),
-    /** Background jobs (BullMQ): webhooks, refunds, expiring unpaid orders. */
+    /**
+     * Seller details printed on GST invoices. Required in production; development and tests
+     * use clearly marked placeholders (see invoicing/seller.ts).
+     */
+    SELLER_GSTIN: z
+      .string()
+      .regex(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/, 'must be a 15-character GSTIN')
+      .optional(),
+    /** GST state code of the warehouse/registration, e.g. "27" for Maharashtra. */
+    SELLER_STATE_CODE: stateCodeSchema.optional(),
+    SELLER_LEGAL_NAME: z.string().trim().min(1).max(200).optional(),
+    /** Registered address as one line; printed on invoices. */
+    SELLER_ADDRESS: z.string().trim().min(1).max(300).optional(),
+    FSSAI_LICENSE_NO: z
+      .string()
+      .regex(/^[0-9]{14}$/, 'must be the 14-digit FSSAI licence number')
+      .optional(),
+    /** Background jobs (BullMQ): webhooks, refunds, expiring unpaid orders, invoices. */
     JOBS_ENABLED: z
       .enum(['true', 'false'])
       .default('true')
@@ -103,6 +121,34 @@ export const envSchema = z
           });
         }
       }
+    }
+    if (env.NODE_ENV === 'production') {
+      for (const key of [
+        'SELLER_GSTIN',
+        'SELLER_STATE_CODE',
+        'SELLER_LEGAL_NAME',
+        'SELLER_ADDRESS',
+        'FSSAI_LICENSE_NO',
+      ] as const) {
+        if (!env[key]) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [key],
+            message: 'required in production (invoices)',
+          });
+        }
+      }
+    }
+    if (
+      env.SELLER_GSTIN &&
+      env.SELLER_STATE_CODE &&
+      !env.SELLER_GSTIN.startsWith(env.SELLER_STATE_CODE)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['SELLER_STATE_CODE'],
+        message: 'must match the first two digits of SELLER_GSTIN',
+      });
     }
     const secrets = [env.JWT_ACCESS_SECRET, env.JWT_REFRESH_SECRET, env.OTP_SECRET];
     if (new Set(secrets).size !== secrets.length) {

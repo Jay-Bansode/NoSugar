@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { RateLimiterService } from '../../common/rate-limiter.service.js';
 import { ENV, type Env } from '../../config/env.js';
+import { InvoicingModule } from '../invoicing/invoicing.module.js';
 import { OrdersModule } from '../orders/orders.module.js';
 import { FakeGateway } from './fake.gateway.js';
 import { PAYMENT_GATEWAY, type PaymentGateway } from './gateway.js';
@@ -20,7 +21,7 @@ function gateway(env: Env): PaymentGateway {
 }
 
 @Module({
-  imports: [OrdersModule],
+  imports: [OrdersModule, InvoicingModule],
   controllers: [PaymentsController],
   providers: [
     PaymentsService,

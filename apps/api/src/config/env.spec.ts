@@ -76,6 +76,43 @@ describe('loadEnv', () => {
     }
   });
 
+  it('requires the seller details for invoices in production', () => {
+    const { message } = errorFrom(() => loadEnv({ ...valid, NODE_ENV: 'production' }));
+    for (const name of [
+      'SELLER_GSTIN',
+      'SELLER_STATE_CODE',
+      'SELLER_LEGAL_NAME',
+      'SELLER_ADDRESS',
+      'FSSAI_LICENSE_NO',
+    ]) {
+      expect(message).toContain(`${name}: required in production`);
+    }
+  });
+
+  it('checks the GSTIN, state code and FSSAI number', () => {
+    const env = loadEnv({
+      ...valid,
+      SELLER_GSTIN: '27ABCDE1234F1Z5',
+      SELLER_STATE_CODE: '27',
+      FSSAI_LICENSE_NO: '12345678901234',
+    });
+    expect(env.SELLER_GSTIN).toBe('27ABCDE1234F1Z5');
+    expect(
+      errorFrom(() => loadEnv({ ...valid, SELLER_GSTIN: '27ABCDE1234F1Z' })).message,
+    ).toContain('SELLER_GSTIN');
+    expect(
+      errorFrom(() =>
+        loadEnv({ ...valid, SELLER_GSTIN: '27ABCDE1234F1Z5', SELLER_STATE_CODE: '29' }),
+      ).message,
+    ).toContain('must match the first two digits of SELLER_GSTIN');
+    expect(errorFrom(() => loadEnv({ ...valid, SELLER_STATE_CODE: '25' })).message).toContain(
+      'SELLER_STATE_CODE',
+    );
+    expect(errorFrom(() => loadEnv({ ...valid, FSSAI_LICENSE_NO: '1234' })).message).toContain(
+      'FSSAI_LICENSE_NO',
+    );
+  });
+
   it('parses JOBS_ENABLED', () => {
     expect(loadEnv({ ...valid, JOBS_ENABLED: 'false' }).JOBS_ENABLED).toBe(false);
   });

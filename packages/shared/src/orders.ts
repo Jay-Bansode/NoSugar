@@ -40,6 +40,16 @@ export const orderTotalsSchema = z.object({
 
 export const orderStatusSchema = z.enum(ORDER_STATUSES);
 
+export const invoiceSummarySchema = z.object({
+  number: z.string(),
+  issuedAt: z.string(),
+  totalPaise: z.number().int(),
+});
+export type InvoiceSummary = z.infer<typeof invoiceSummarySchema>;
+
+export const creditNoteSummarySchema = invoiceSummarySchema.extend({ id: z.uuid() });
+export type CreditNoteSummary = z.infer<typeof creditNoteSummarySchema>;
+
 export const orderDetailSchema = z.object({
   number: z.string(),
   status: orderStatusSchema,
@@ -56,6 +66,10 @@ export const orderDetailSchema = z.object({
   payment: paymentDetailsSchema.nullable(),
   /** Latest refund on this order, if any. */
   refund: refundSummarySchema.nullable(),
+  /** GST invoice, once issued (shortly after the order is confirmed). PDF: GET …/invoice. */
+  invoice: invoiceSummarySchema.nullable(),
+  /** Credit notes against the invoice. PDF: GET …/credit-notes/:id. */
+  creditNotes: z.array(creditNoteSummarySchema),
 });
 export type OrderDetail = z.infer<typeof orderDetailSchema>;
 

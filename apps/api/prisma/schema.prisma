@@ -558,7 +558,7 @@ model Invoice {
   orderId           String   @unique @map("order_id") @db.Uuid
   seriesId          String   @map("series_id") @db.Uuid
   sequence          Int
-  /// Full printed number, e.g. "INV/2026-27/000123" (format pending CA confirmation).
+  /// Full printed number, e.g. "INV/26-27/000123" (max 16 characters; format pending CA confirmation).
   number            String   @unique
   sellerGstin       String   @map("seller_gstin")
   sellerStateCode   String   @map("seller_state_code") @db.Char(2)
@@ -568,6 +568,12 @@ model Invoice {
   sgstPaise         Int      @default(0) @map("sgst_paise")
   igstPaise         Int      @default(0) @map("igst_paise")
   totalPaise        Int      @map("total_paise")
+  /// Snapshot: legal name, address, FSSAI licence number.
+  seller            Json
+  /// Snapshot: name and delivery address (no phone number).
+  buyer             Json
+  /// Snapshot: DocumentLine[] from packages/shared/src/invoice.ts.
+  lines             Json
   pdfKey            String?  @map("pdf_key")
   issuedAt          DateTime @default(now()) @map("issued_at") @db.Timestamptz(3)
 
@@ -591,6 +597,9 @@ model CreditNote {
   sgstPaise         Int      @default(0) @map("sgst_paise")
   igstPaise         Int      @default(0) @map("igst_paise")
   totalPaise        Int      @map("total_paise")
+  reason            String
+  /// Snapshot: CreditNoteLine[] from packages/shared/src/invoice.ts.
+  lines             Json
   pdfKey            String?  @map("pdf_key")
   issuedAt          DateTime @default(now()) @map("issued_at") @db.Timestamptz(3)
 
