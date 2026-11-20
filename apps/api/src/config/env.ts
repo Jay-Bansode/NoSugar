@@ -40,6 +40,17 @@ export const envSchema = z
       .string()
       .regex(/^[1-9][0-9]{5}$/)
       .optional(),
+    /** "fake" is an in-memory gateway for development (refused in production). */
+    PAYMENT_PROVIDER: z.enum(['fake', 'razorpay']).default('fake'),
+    RAZORPAY_API_BASE: z.url({ protocol: /^https$/ }).default('https://api.razorpay.com/v1'),
+    RAZORPAY_KEY_ID: z.string().min(1).optional(),
+    RAZORPAY_KEY_SECRET: z.string().min(1).optional(),
+    RAZORPAY_WEBHOOK_SECRET: z.string().min(1).optional(),
+    /** Background jobs (BullMQ): webhooks, refunds, expiring unpaid orders. */
+    JOBS_ENABLED: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((v) => v === 'true'),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production' && env.OTP_PROVIDER === 'console') {
@@ -55,6 +66,28 @@ export const envSchema = z
         path: ['SHIPPING_PROVIDER'],
         message: 'the stub shipping provider is for development only; use "shiprocket"',
       });
+    }
+    if (env.NODE_ENV === 'production' && env.PAYMENT_PROVIDER === 'fake') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['PAYMENT_PROVIDER'],
+        message: 'the fake payment gateway is for development only; use "razorpay"',
+      });
+    }
+    if (env.PAYMENT_PROVIDER === 'razorpay') {
+      for (const key of [
+        'RAZORPAY_KEY_ID',
+        'RAZORPAY_KEY_SECRET',
+        'RAZORPAY_WEBHOOK_SECRET',
+      ] as const) {
+        if (!env[key]) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [key],
+            message: 'required when PAYMENT_PROVIDER=razorpay',
+          });
+        }
+      }
     }
     if (env.SHIPPING_PROVIDER === 'shiprocket') {
       for (const key of [

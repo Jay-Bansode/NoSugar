@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import {
   assertOrderTransition,
   ErrorCode,
@@ -11,9 +11,16 @@ import {
   shippingAddressSchema,
 } from '@brand/shared';
 import { AppException } from '../../common/app.exception.js';
+import { ENV, type Env } from '../../config/env.js';
 import type { OrderEventActor, Prisma } from '../../generated/prisma/client.js';
+import { JobsService } from '../../jobs/jobs.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { FAKE_KEY_ID } from '../payments/fake.gateway.js';
 import { orderDemand, type StockEffect, stockEffect } from './order-stock.js';
+
+/** Job that issues a refund with Razorpay (handled by the payments module). */
+export const ISSUE_REFUND_JOB = 'issue-refund';
+const EXPIRE_JOB = 'expire-reservations';
 
 type Tx = Prisma.TransactionClient;
 
@@ -24,9 +31,14 @@ export interface TransitionContext {
   metadata?: Prisma.InputJsonValue;
 }
 
-type OrderWithDetail = Prisma.OrderGetPayload<{
-  include: { items: true; events: { orderBy: { id: 'asc' } } };
-}>;
+const DETAIL_INCLUDE = {
+  items: true,
+  events: { orderBy: { id: 'asc' } },
+  payments: { orderBy: { createdAt: 'desc' } },
+  refunds: { orderBy: { createdAt: 'desc' }, take: 1 },
+} satisfies Prisma.OrderInclude;
+
+type OrderWithDetail = Prisma.OrderGetPayload<{ include: typeof DETAIL_INCLUDE }>;
 
 const UNPAID: readonly OrderStatus[] = ['pending_payment', 'payment_failed'];
 const EXPIRY_BATCH = 100;
@@ -36,10 +48,27 @@ const EXPIRY_BATCH = 100;
  * machine, writes the order_events row and moves stock (CLAUDE.md §5).
  */
 @Injectable()
-export class OrdersService {
+export class OrdersService implements OnModuleInit {
   private readonly logger = new Logger(OrdersService.name);
+  private readonly paymentKeyId: string;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly jobs: JobsService,
+    @Inject(ENV) env: Env,
+  ) {
+    this.paymentKeyId =
+      env.PAYMENT_PROVIDER === 'razorpay' ? (env.RAZORPAY_KEY_ID ?? '') : FAKE_KEY_ID;
+  }
+
+  onModuleInit(): void {
+    // CLAUDE.md §6 step 9: release stock held by unpaid orders, checked every minute.
+    this.jobs.schedule(EXPIRE_JOB, 60_000, async () => {
+      const expired = await this.expireReservations();
+      if (expired > 0)
+        this.logger.log(`Cancelled ${expired} unpaid order(s) past their reservation`);
+    });
+  }
 
   /** Changes an order's status inside `tx`. Locks the order row first. */
   async transition(
@@ -126,32 +155,63 @@ export class OrdersService {
     return this.toDetail(
       await this.prisma.order.findUniqueOrThrow({
         where: { id: orderId },
-        include: { items: true, events: { orderBy: { id: 'asc' } } },
+        include: DETAIL_INCLUDE,
       }),
     );
   }
 
-  /** Customer cancellation: only before dispatch, and not yet for paid prepaid orders. */
+  /**
+   * Customer cancellation, before dispatch only. A paid prepaid order is refunded in full:
+   * the refund row is written with the cancellation and issued by a retried background job.
+   */
   async cancelByCustomer(customerId: string, number: string): Promise<OrderDetail> {
     const order = await this.findOwn(customerId, number);
-    if (!canCustomerCancel(order)) {
-      const paid = isCancellable(order.status) && order.paymentMethod === 'prepaid';
+    if (!isCancellable(order.status)) {
       throw new AppException(
         ErrorCode.ORDER_NOT_CANCELLABLE,
-        paid
-          ? 'This order is paid. Please contact support to cancel and get a refund.'
-          : 'This order can no longer be cancelled.',
+        'This order can no longer be cancelled.',
         HttpStatus.CONFLICT,
       );
     }
-    await this.prisma.$transaction((tx) =>
-      this.transition(tx, order.id, 'cancelled', {
+    const refundId = await this.prisma.$transaction(async (tx) => {
+      await this.transition(tx, order.id, 'cancelled', {
         actor: 'customer',
         actorRef: customerId,
         note: 'Cancelled by customer',
-      }),
-    );
+      });
+      return this.createFullRefund(tx, order.id, 'Cancelled by customer', customerId);
+    });
+    if (refundId) await this.jobs.enqueue(ISSUE_REFUND_JOB, { refundId }, `refund-${refundId}`);
     return this.detailById(order.id);
+  }
+
+  /**
+   * Writes a pending full refund for the order's captured payment, if there is one and it
+   * isn't refunded yet. Returns the refund id to issue, or null when nothing was paid.
+   */
+  async createFullRefund(
+    tx: Tx,
+    orderId: string,
+    reason: string,
+    createdBy: string,
+  ): Promise<string | null> {
+    const payment = await tx.payment.findFirst({
+      where: { orderId, status: 'captured', razorpayPaymentId: { not: null } },
+      include: { refunds: true },
+    });
+    if (!payment) return null;
+    const alreadyRefunded = payment.refunds
+      .filter((r) => r.status !== 'failed')
+      .reduce((sum, r) => sum + r.amountPaise, 0);
+    const amount = payment.amountPaise - alreadyRefunded;
+    if (amount <= 0) return null;
+    const refund = await tx.refund.create({
+      data: { orderId, paymentId: payment.id, amountPaise: amount, reason, createdBy },
+    });
+    this.logger.log(
+      `Refund created (orderId=${orderId}, refundId=${refund.id}, amountPaise=${amount})`,
+    );
+    return refund.id;
   }
 
   /**
@@ -192,7 +252,7 @@ export class OrdersService {
   private async findOwn(customerId: string, number: string): Promise<OrderWithDetail> {
     const order = await this.prisma.order.findFirst({
       where: { number, customerId },
-      include: { items: true, events: { orderBy: { id: 'asc' } } },
+      include: DETAIL_INCLUDE,
     });
     // Same 404 for "not yours" and "doesn't exist".
     if (!order)
@@ -230,21 +290,28 @@ export class OrdersService {
         UNPAID.includes(order.status) && order.reservationExpiresAt
           ? order.reservationExpiresAt.toISOString()
           : null,
-      canCancel: canCustomerCancel(order),
+      canCancel: isCancellable(order.status),
       timeline: order.events.map((e) => ({ status: e.toStatus, at: e.createdAt.toISOString() })),
-      payment: null,
+      payment: this.paymentDetails(order),
+      refund: order.refunds[0]
+        ? { status: order.refunds[0].status, amountPaise: order.refunds[0].amountPaise }
+        : null,
     };
   }
-}
 
-function canCustomerCancel(order: {
-  status: OrderStatus;
-  paymentMethod: string;
-  totalPaise: number;
-}): boolean {
-  if (!isCancellable(order.status)) return false;
-  // Paid prepaid orders need a refund; that arrives with Razorpay refunds.
-  return order.paymentMethod === 'cod' || UNPAID.includes(order.status) || order.totalPaise === 0;
+  /** Razorpay Checkout details while the order still needs paying (retries reuse the order). */
+  private paymentDetails(order: OrderWithDetail): OrderDetail['payment'] {
+    if (order.paymentMethod !== 'prepaid' || !UNPAID.includes(order.status)) return null;
+    const open = order.payments.find((p) => p.status === 'created' || p.status === 'failed');
+    if (!open) return null;
+    return {
+      provider: 'razorpay',
+      keyId: this.paymentKeyId,
+      razorpayOrderId: open.razorpayOrderId,
+      amountPaise: open.amountPaise,
+      currency: 'INR',
+    };
+  }
 }
 
 /** Applies a stock effect to every variant the order uses. DB CHECKs stop negatives. */

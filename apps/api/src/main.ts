@@ -15,6 +15,8 @@ async function bootstrap(): Promise<void> {
   const env = loadEnv();
   const app = await NestFactory.create<NestExpressApplication>(AppModule.forRoot(env), {
     bufferLogs: true,
+    // Webhook signatures are computed over the exact bytes received (req.rawBody).
+    rawBody: true,
   });
   configureApp(app);
   await app.listen(env.PORT);

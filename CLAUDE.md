@@ -5,7 +5,7 @@
 - **Brand name:** TBD (use `brand` / `Brand` as placeholders in code)
 - **Market:** India only (INR, GST, Hindi/English users, UPI-first, Cash on Delivery)
 - **Last updated:** 2026-11-19
-- **Current phase:** Phase 1 – Core API: slices 1 (schema, migration, seed), 2 (OTP auth), 3 (catalog), 4 (pricing), 5 (cart), 6 (serviceability, against a stand-in until the Shiprocket account exists) and 7 (checkout and orders) done; next slice 8 (Razorpay payments). Phase 0 non-code items (accounts, GST/FSSAI, Figma) still pending (update this line as work progresses)
+- **Current phase:** Phase 1 – Core API: slices 1 (schema, migration, seed), 2 (OTP auth), 3 (catalog), 4 (pricing), 5 (cart), 6 (serviceability, against a stand-in until the Shiprocket account exists), 7 (checkout and orders) and 8 (Razorpay payments, webhooks, refunds; against a fake gateway until test keys exist) done; next slice 9 (GST invoices). Phase 0 non-code items (accounts, GST/FSSAI, Figma) still pending (update this line as work progresses)
 
 ---
 
@@ -220,25 +220,25 @@ Every transition writes a row to `order_events` (or the equivalent events table)
 
 ### Main customer endpoints (initial)
 
-| Method & path                                                                                   | Purpose                                                                                                 |
-| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `POST /v1/auth/otp` · `POST /v1/auth/verify` · `POST /v1/auth/refresh` · `POST /v1/auth/logout` | Login                                                                                                   |
-| `GET /v1/products` · `GET /v1/products/:slug` · `GET /v1/collections/:slug`                     | Catalog                                                                                                 |
-| `GET /v1/bundles` · `GET /v1/bundles/:slug`                                                     | Bundles and their pickable packs (bundle builder)                                                       |
-| `GET /v1/me`                                                                                    | Logged-in customer profile                                                                              |
-| `GET/PATCH/DELETE /v1/cart` · `POST /v1/cart/items` · `PATCH/DELETE /v1/cart/items/:id`         | Cart (guests send `X-Cart-Id`; PATCH sets the discount code; `?paymentMethod=cod` previews the COD fee) |
-| `GET /v1/serviceability?pincode=`                                                               | Delivery check                                                                                          |
-| `POST /v1/checkout`                                                                             | Create order from the cart (login + `Idempotency-Key` required); Razorpay order added in slice 8        |
-| `POST /v1/payments/verify`                                                                      | Verify Razorpay signature                                                                               |
-| `GET /v1/orders` · `GET /v1/orders/:number` · `POST /v1/orders/:number/cancel`                  | Orders                                                                                                  |
-| `GET /v1/orders/:number/invoice`                                                                | Invoice PDF                                                                                             |
-| `GET /v1/wallet`                                                                                | Balance, expiry, ledger                                                                                 |
-| `POST /v1/trial/refund-request`                                                                 | 48-hour trial refund                                                                                    |
-| `POST /v1/reviews`                                                                              | Submit review (verified buyers)                                                                         |
-| `POST /v1/leads`                                                                                | Notify-me form                                                                                          |
-| `POST /v1/devices`                                                                              | Register push token                                                                                     |
-| `GET /v1/config`                                                                                | Banners, countdown end dates, min app version, fees                                                     |
-| `DELETE /v1/me`                                                                                 | Delete account                                                                                          |
+| Method & path                                                                                   | Purpose                                                                                                                          |
+| ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /v1/auth/otp` · `POST /v1/auth/verify` · `POST /v1/auth/refresh` · `POST /v1/auth/logout` | Login                                                                                                                            |
+| `GET /v1/products` · `GET /v1/products/:slug` · `GET /v1/collections/:slug`                     | Catalog                                                                                                                          |
+| `GET /v1/bundles` · `GET /v1/bundles/:slug`                                                     | Bundles and their pickable packs (bundle builder)                                                                                |
+| `GET /v1/me`                                                                                    | Logged-in customer profile                                                                                                       |
+| `GET/PATCH/DELETE /v1/cart` · `POST /v1/cart/items` · `PATCH/DELETE /v1/cart/items/:id`         | Cart (guests send `X-Cart-Id`; PATCH sets the discount code; `?paymentMethod=cod` previews the COD fee)                          |
+| `GET /v1/serviceability?pincode=`                                                               | Delivery check                                                                                                                   |
+| `POST /v1/checkout`                                                                             | Create order from the cart (login + `Idempotency-Key` required); prepaid orders get a Razorpay order (`payment` in the response) |
+| `POST /v1/payments/verify`                                                                      | Verify Razorpay signature, then confirm with Razorpay's own record (order, amount, captured)                                     |
+| `GET /v1/orders` · `GET /v1/orders/:number` · `POST /v1/orders/:number/cancel`                  | Orders                                                                                                                           |
+| `GET /v1/orders/:number/invoice`                                                                | Invoice PDF                                                                                                                      |
+| `GET /v1/wallet`                                                                                | Balance, expiry, ledger                                                                                                          |
+| `POST /v1/trial/refund-request`                                                                 | 48-hour trial refund                                                                                                             |
+| `POST /v1/reviews`                                                                              | Submit review (verified buyers)                                                                                                  |
+| `POST /v1/leads`                                                                                | Notify-me form                                                                                                                   |
+| `POST /v1/devices`                                                                              | Register push token                                                                                                              |
+| `GET /v1/config`                                                                                | Banners, countdown end dates, min app version, fees                                                                              |
+| `DELETE /v1/me`                                                                                 | Delete account                                                                                                                   |
 
 ### Webhooks received
 
@@ -326,6 +326,9 @@ SHIPROCKET_PICKUP_LOCATION=
 SHIPROCKET_PICKUP_PINCODE=   # warehouse PIN; serviceability is checked from here
 SHIPROCKET_API_BASE=         # default https://apiv2.shiprocket.in/v1/external
 SHIPPING_PROVIDER=           # "stub" (dev only, refused in production) or "shiprocket"
+PAYMENT_PROVIDER=            # "fake" (dev only, refused in production) or "razorpay" (needs the three RAZORPAY_* values)
+RAZORPAY_API_BASE=           # default https://api.razorpay.com/v1
+JOBS_ENABLED=                # default true; false turns off background jobs (BullMQ)
 SMS_PROVIDER_API_KEY=
 WHATSAPP_PROVIDER_API_KEY=
 FCM_SERVICE_ACCOUNT_JSON=
@@ -426,8 +429,13 @@ Record decisions here (or as ADRs in `docs/adr/`) so every AI tool and teammate 
 | 2026-11-20 | Discount redemptions are created at order placement and deleted when the order is cancelled                                                                                                                                                  | Pending orders count against usage limits, so limits can't be exceeded by concurrent checkouts                                                    |
 | 2026-11-20 | `order_items.discount_paise` added (per-line discount share)                                                                                                                                                                                 | Invoices need each line's taxable value                                                                                                           |
 | 2026-11-20 | Order numbers: `BR` + Postgres sequence starting 1000001                                                                                                                                                                                     | Readable; gaps are acceptable for order numbers (invoice numbers use their own gapless series)                                                    |
-| 2026-11-20 | Customers can cancel unpaid prepaid orders and COD orders before dispatch; paid prepaid cancellation is "contact support" until refunds exist                                                                                                | Cancelling a paid order needs a Razorpay refund                                                                                                   |
-| 2026-11-20 | Unpaid-order expiry runs in-process every minute behind a Redis lock (`ReservationSweeper`)                                                                                                                                                  | Moves to a BullMQ repeatable job when the queue arrives with webhooks                                                                             |
+| 2026-11-20 | Customers can cancel any order before dispatch; a paid prepaid order is restocked and refunded in full (refund row written with the cancellation, issued by a background job)                                                                | Superseded the slice-7 "contact support" rule once refunds existed                                                                                |
+| 2026-11-20 | Background jobs on BullMQ 6: one `jobs` queue, worker in the API process, key prefix `brand:<NODE_ENV>`, 8 attempts with exponential backoff; unpaid-order expiry is a job scheduler (every 60 s). `JOBS_ENABLED=false` turns jobs off       | Replaced the in-process sweeper; tests never pick up a dev server's jobs                                                                          |
+| 2026-11-20 | Razorpay over plain `fetch` (no SDK) behind a `PaymentGateway` interface; an in-memory fake (same signature algorithms, fixed dev secrets) for development and tests, refused in production                                                  | Small surface; fully testable without credentials                                                                                                 |
+| 2026-11-20 | Verify = Checkout signature + fetch the payment from Razorpay (order id, amount, status); `authorized` payments are captured; the webhook and verify both end in one idempotent `confirmCaptured`                                            | A forged or replayed client callback can't confirm an order; works whether or not auto-capture is on                                              |
+| 2026-11-20 | Webhooks: HMAC over the raw body (`rawBody: true`), stored in `webhook_events` keyed by `X-Razorpay-Event-Id`, queued with a job id per event, processed idempotently; unknown events stored and marked processed                            | CLAUDE.md §7 rules; duplicates and retries are harmless                                                                                           |
+| 2026-11-20 | A payment captured after its order expired is refunded automatically; the order stays cancelled                                                                                                                                              | Its stock was already released                                                                                                                    |
+| 2026-11-20 | Refunds are tagged with our refund id (`notes.refund_ref`); a retry first looks for an existing refund with that tag                                                                                                                         | Razorpay has no idempotency key for refunds; this prevents double refunds                                                                         |
 
 ---
 

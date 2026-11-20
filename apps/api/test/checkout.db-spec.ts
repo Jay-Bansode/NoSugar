@@ -175,6 +175,9 @@ afterAll(async () => {
       select: { id: true },
     });
     const orderIds = orders.map((o) => o.id);
+    // Triggers (and so foreign keys) are off here: delete every child table explicitly.
+    await tx.refund.deleteMany({ where: { orderId: { in: orderIds } } });
+    await tx.payment.deleteMany({ where: { orderId: { in: orderIds } } });
     await tx.orderEvent.deleteMany({ where: { orderId: { in: orderIds } } });
     await tx.discountRedemption.deleteMany({ where: { orderId: { in: orderIds } } });
     await tx.orderItem.deleteMany({ where: { orderId: { in: orderIds } } });
@@ -427,7 +430,7 @@ describe('cancelling', () => {
     });
   });
 
-  it('refuses after dispatch, and asks paid prepaid orders to contact support', async () => {
+  it('refuses after dispatch', async () => {
     const c = await customer();
     const orders = app.get(OrdersService);
     await add(c, { variantId: f.six });
@@ -441,16 +444,7 @@ describe('cancelling', () => {
       await http(c, 'post', `/v1/orders/${cod.number}/cancel`).expect(409),
       'ORDER_NOT_CANCELLABLE',
     );
-
-    await add(c, { variantId: f.six });
-    const prepaid = await placed(c, { paymentMethod: 'prepaid', address: PUNE });
-    const prepaidId = (await orderRow(prepaid.number)).id;
-    await prisma.$transaction((tx) =>
-      orders.transition(tx, prepaidId, 'confirmed', { actor: 'webhook' }),
-    );
-    const res = await http(c, 'post', `/v1/orders/${prepaid.number}/cancel`).expect(409);
-    expectCode(res, 'ORDER_NOT_CANCELLABLE');
-    expect(res.body.error.message).toMatch(/contact support/);
+    // Paid prepaid cancellation (with refund) is covered in payments.db-spec.ts.
   });
 
   it("can't see or cancel another customer's order", async () => {

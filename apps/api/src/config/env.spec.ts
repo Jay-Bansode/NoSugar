@@ -24,6 +24,9 @@ describe('loadEnv', () => {
       OTP_PROVIDER: 'console',
       SHIPPING_PROVIDER: 'stub',
       SHIPROCKET_API_BASE: 'https://apiv2.shiprocket.in/v1/external',
+      PAYMENT_PROVIDER: 'fake',
+      RAZORPAY_API_BASE: 'https://api.razorpay.com/v1',
+      JOBS_ENABLED: true,
     });
   });
 
@@ -59,10 +62,22 @@ describe('loadEnv', () => {
     expect(message).toContain('must all be different');
   });
 
-  it('refuses the console OTP provider and stub shipping in production', () => {
+  it('refuses every development stand-in in production', () => {
     const { message } = errorFrom(() => loadEnv({ ...valid, NODE_ENV: 'production' }));
     expect(message).toContain('OTP_PROVIDER');
     expect(message).toContain('SHIPPING_PROVIDER');
+    expect(message).toContain('PAYMENT_PROVIDER');
+  });
+
+  it('requires all three Razorpay secrets when using Razorpay', () => {
+    const { message } = errorFrom(() => loadEnv({ ...valid, PAYMENT_PROVIDER: 'razorpay' }));
+    for (const name of ['RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET', 'RAZORPAY_WEBHOOK_SECRET']) {
+      expect(message).toContain(name);
+    }
+  });
+
+  it('parses JOBS_ENABLED', () => {
+    expect(loadEnv({ ...valid, JOBS_ENABLED: 'false' }).JOBS_ENABLED).toBe(false);
   });
 
   it('requires Shiprocket credentials and pickup PIN when using Shiprocket', () => {

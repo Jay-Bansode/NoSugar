@@ -11,6 +11,9 @@ import { CatalogModule } from './modules/catalog/catalog.module.js';
 import { CheckoutModule } from './modules/checkout/checkout.module.js';
 import { OrdersModule } from './modules/orders/orders.module.js';
 import { FulfilmentModule } from './modules/fulfilment/fulfilment.module.js';
+import { PaymentsModule } from './modules/payments/payments.module.js';
+import { WebhooksModule } from './modules/webhooks/webhooks.module.js';
+import { JobsModule } from './jobs/jobs.service.js';
 import { PricingModule } from './modules/pricing/pricing.module.js';
 import { SettingsModule } from './settings/settings.service.js';
 import { HealthModule } from './modules/health/health.module.js';
@@ -59,6 +62,7 @@ export class AppModule {
         }),
         PrismaModule,
         RedisModule,
+        JobsModule,
         SettingsModule,
         AuthModule,
         CatalogModule,
@@ -67,6 +71,8 @@ export class AppModule {
         FulfilmentModule,
         OrdersModule,
         CheckoutModule,
+        PaymentsModule,
+        WebhooksModule,
         HealthModule,
       ],
       providers: [{ provide: APP_FILTER, useClass: HttpExceptionFilter }],

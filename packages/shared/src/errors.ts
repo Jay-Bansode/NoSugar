@@ -33,6 +33,9 @@ export const ErrorCode = {
   /** We can't deliver to this PIN code. */
   NOT_SERVICEABLE: 'NOT_SERVICEABLE',
   ORDER_NOT_CANCELLABLE: 'ORDER_NOT_CANCELLABLE',
+  /** Bad signature, or Razorpay's record doesn't match the order (amount, order id, status). */
+  PAYMENT_VERIFICATION_FAILED: 'PAYMENT_VERIFICATION_FAILED',
+  WEBHOOK_SIGNATURE_INVALID: 'WEBHOOK_SIGNATURE_INVALID',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

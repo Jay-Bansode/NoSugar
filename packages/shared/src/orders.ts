@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { addressInputSchema, shippingAddressSchema } from './address.js';
 import { ORDER_STATUSES, PAYMENT_METHODS } from './order-status.js';
+import { paymentDetailsSchema, refundSummarySchema } from './payments.js';
 
 export const IDEMPOTENCY_KEY_HEADER = 'idempotency-key';
 export const idempotencyKeySchema = z.uuid('Idempotency-Key must be a UUID');
@@ -51,8 +52,10 @@ export const orderDetailSchema = z.object({
   payBy: z.string().nullable(),
   canCancel: z.boolean(),
   timeline: z.array(z.object({ status: orderStatusSchema, at: z.string() })),
-  /** Razorpay checkout details for unpaid prepaid orders (added with payments). */
-  payment: z.null(),
+  /** Razorpay Checkout details while a prepaid order is unpaid; null otherwise. */
+  payment: paymentDetailsSchema.nullable(),
+  /** Latest refund on this order, if any. */
+  refund: refundSummarySchema.nullable(),
 });
 export type OrderDetail = z.infer<typeof orderDetailSchema>;
 

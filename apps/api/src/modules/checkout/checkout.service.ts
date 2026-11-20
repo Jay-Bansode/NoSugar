@@ -17,6 +17,7 @@ import { CartService } from '../cart/cart.service.js';
 import { ServiceabilityService } from '../fulfilment/serviceability.service.js';
 import { applyStock, OrdersService } from '../orders/orders.service.js';
 import { stockEffect } from '../orders/order-stock.js';
+import { PaymentsService } from '../payments/payments.service.js';
 import { PricingService, type PricingItem, type QuoteResult } from '../pricing/pricing.service.js';
 
 type Tx = Prisma.TransactionClient;
@@ -45,6 +46,7 @@ export class CheckoutService {
     private readonly orders: OrdersService,
     private readonly settings: SettingsService,
     private readonly rateLimiter: RateLimiterService,
+    private readonly payments: PaymentsService,
   ) {}
 
   async checkout(
@@ -54,7 +56,11 @@ export class CheckoutService {
     ip: string,
   ): Promise<CheckoutResult> {
     const existing = await this.findByKey(this.prisma, customerId, idempotencyKey);
-    if (existing) return { order: await this.orders.detailById(existing), replayed: true };
+    if (existing) {
+      // A retry also recovers from a Razorpay outage during the first attempt.
+      await this.payments.ensurePayment(existing);
+      return { order: await this.orders.detailById(existing), replayed: true };
+    }
     await this.rateLimiter.consume(CHECKOUT_LIMIT, customerId);
 
     // Fast, friendly checks outside the transaction (re-checked inside where it matters).
@@ -93,6 +99,9 @@ export class CheckoutService {
       (tx) => this.placeOrder(tx, customerId, idempotencyKey, request, address, settings),
       { timeout: 15_000 },
     );
+    // Prepaid: create the Razorpay order now that ours is committed. If Razorpay is down this
+    // throws 503; the order stays reserved and retrying with the same key completes it.
+    await this.payments.ensurePayment(orderId);
     return { order: await this.orders.detailById(orderId), replayed: false };
   }
 

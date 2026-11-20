@@ -19,6 +19,7 @@ describe('API (e2e, no dependencies)', () => {
       APP_VERSION: '9.9.9',
       DATABASE_URL: 'postgresql://brand:brand@127.0.0.1:1/brand',
       REDIS_URL: 'redis://127.0.0.1:1',
+      JOBS_ENABLED: 'false',
     });
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule.forRoot(env)],
