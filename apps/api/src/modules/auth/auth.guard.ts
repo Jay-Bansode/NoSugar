@@ -12,8 +12,10 @@ import type { Request } from 'express';
 import { AppException } from '../../common/app.exception.js';
 import { type AuthContext, TokenService } from './token.service.js';
 
-const IS_PUBLIC = 'auth:isPublic';
+export const IS_PUBLIC = 'auth:isPublic';
 const IS_OPTIONAL = 'auth:isOptional';
+/** Roles allowed on an admin route (set by @AdminController). Such routes use AdminGuard. */
+export const ADMIN_ROLES_KEY = 'auth:adminRoles';
 
 /** Marks a route (or controller) as reachable without an access token. */
 export const Public = () => SetMetadata(IS_PUBLIC, true);
@@ -46,6 +48,12 @@ export class AccessTokenGuard implements CanActivate {
       context.getClass(),
     ]);
     if (isPublic) return true;
+    // Admin routes take admin tokens, checked by AdminGuard (modules/admin).
+    const adminRoles = this.reflector.getAllAndOverride<unknown>(ADMIN_ROLES_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (adminRoles) return true;
 
     const req = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const isOptional = this.reflector.getAllAndOverride<boolean>(IS_OPTIONAL, [

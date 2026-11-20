@@ -614,6 +614,91 @@ model CreditNote {
 
 // ─────────────────────────── Platform ────────────────────────────
 
+/// Fixed roles; what each may do is decided in code (@AdminController roles).
+enum AdminRole {
+  owner
+  operations
+  support
+
+  @@map("admin_role")
+}
+
+/// Admin panel staff. Never deleted (audit_log points here); disabled instead.
+model AdminUser {
+  id                String    @id @default(uuid(7)) @db.Uuid
+  /// Stored lower-case.
+  email             String    @unique
+  name              String
+  role              AdminRole
+  /// scrypt hash with its parameters and salt (see modules/admin/password.ts).
+  passwordHash      String    @map("password_hash")
+  passwordChangedAt DateTime  @default(now()) @map("password_changed_at") @db.Timestamptz(3)
+  /// Authenticator-app key, AES-256-GCM encrypted with ADMIN_TOTP_KEY. Set at first login.
+  totpSecret        String?   @map("totp_secret")
+  /// Null until the admin has proved the app works by entering a code.
+  totpEnabledAt     DateTime? @map("totp_enabled_at") @db.Timestamptz(3)
+  /// Last 30-second step accepted, so a code can't be used twice.
+  totpLastStep      Int?      @map("totp_last_step")
+  failedAttempts    Int       @default(0) @map("failed_attempts")
+  lockedUntil       DateTime? @map("locked_until") @db.Timestamptz(3)
+  lastLoginAt       DateTime? @map("last_login_at") @db.Timestamptz(3)
+  disabledAt        DateTime? @map("disabled_at") @db.Timestamptz(3)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  sessions  AdminSession[]
+  auditLogs AuditLog[]
+
+  @@map("admin_users")
+}
+
+/// Admin refresh sessions: same rotation and reuse detection as customer sessions, but
+/// rotation never extends the session past its first expiry (one working day).
+model AdminSession {
+  id               String    @id @default(uuid(7)) @db.Uuid
+  adminUserId      String    @map("admin_user_id") @db.Uuid
+  familyId         String    @map("family_id") @db.Uuid
+  /// HMAC-SHA256 (keyed with ADMIN_JWT_SECRET) of the refresh token.
+  refreshTokenHash String    @unique @map("refresh_token_hash")
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz(3)
+  replacedById     String?   @unique @map("replaced_by_id") @db.Uuid
+  userAgent        String?   @map("user_agent")
+  ip               String?
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  adminUser  AdminUser     @relation(fields: [adminUserId], references: [id], onDelete: Restrict)
+  replacedBy AdminSession? @relation("AdminSessionRotation", fields: [replacedById], references: [id])
+  replaces   AdminSession? @relation("AdminSessionRotation")
+
+  @@index([adminUserId])
+  @@index([familyId])
+  @@map("admin_sessions")
+}
+
+/// Append-only (UPDATE/DELETE blocked by trigger). One row per admin action (CLAUDE.md §8).
+model AuditLog {
+  id          BigInt   @id @default(autoincrement())
+  /// Null for actions taken by the system or the command line.
+  adminUserId String?  @map("admin_user_id") @db.Uuid
+  /// e.g. "admin.login", "order.cancel".
+  action      String
+  entityType  String?  @map("entity_type")
+  entityId    String?  @map("entity_id")
+  /// What changed, e.g. { before, after }. Never secrets.
+  changes     Json     @default("{}")
+  ip          String?
+  requestId   String?  @map("request_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  adminUser AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: Restrict)
+
+  @@index([adminUserId, createdAt])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_log")
+}
+
 /// Every inbound webhook, stored before processing. Unique per source → processed once.
 model WebhookEvent {
   id              String        @id @default(uuid(7)) @db.Uuid

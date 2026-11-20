@@ -5,6 +5,8 @@ import type { IncomingMessage } from 'node:http';
 import { LoggerModule } from 'nestjs-pino';
 import { HttpExceptionFilter } from './common/http-exception.filter.js';
 import { ENV, type Env } from './config/env.js';
+import { AuditModule } from './audit/audit.service.js';
+import { AdminModule } from './modules/admin/admin.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { CartModule } from './modules/cart/cart.module.js';
 import { CatalogModule } from './modules/catalog/catalog.module.js';
@@ -31,6 +33,11 @@ const REDACT_PATHS = [
   '*.token',
   '*.refreshToken',
   '*.accessToken',
+  '*.password',
+  '*.currentPassword',
+  '*.newPassword',
+  '*.challengeToken',
+  '*.code',
 ];
 
 @Global()
@@ -64,7 +71,9 @@ export class AppModule {
         RedisModule,
         JobsModule,
         SettingsModule,
+        AuditModule,
         AuthModule,
+        AdminModule,
         CatalogModule,
         PricingModule,
         CartModule,

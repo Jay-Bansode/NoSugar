@@ -5,7 +5,7 @@
 - **Brand name:** TBD (use `brand` / `Brand` as placeholders in code)
 - **Market:** India only (INR, GST, Hindi/English users, UPI-first, Cash on Delivery)
 - **Last updated:** 2026-11-19
-- **Current phase:** Phase 1 – Core API: slices 1 (schema, migration, seed), 2 (OTP auth), 3 (catalog), 4 (pricing), 5 (cart), 6 (serviceability, against a stand-in until the Shiprocket account exists), 7 (checkout and orders), 8 (Razorpay payments, webhooks, refunds; against a fake gateway until test keys exist) and 9 (GST invoices and credit notes; placeholder seller details until GSTIN/FSSAI exist) done, so the Phase 1 code is complete; next Phase 2 (admin panel). Phase 0 non-code items (accounts, GST/FSSAI, Figma) still pending (update this line as work progresses)
+- **Current phase:** Phase 1 – Core API: slices 1 (schema, migration, seed), 2 (OTP auth), 3 (catalog), 4 (pricing), 5 (cart), 6 (serviceability, against a stand-in until the Shiprocket account exists), 7 (checkout and orders), 8 (Razorpay payments, webhooks, refunds; against a fake gateway until test keys exist) and 9 (GST invoices and credit notes; placeholder seller details until GSTIN/FSSAI exist) done, so the Phase 1 code is complete. Phase 2 – Admin panel: slice 1 (admin sign-in with password + authenticator app, roles, audit log; API) done; next slice 2 (admin app foundation). Phase 0 non-code items (accounts, GST/FSSAI, Figma) still pending (update this line as work progresses)
 
 ---
 
@@ -137,7 +137,7 @@ Each module: `*.module.ts`, `*.controller.ts`, `*.service.ts`, `dto/`, `*.spec.t
 | Tax            | `invoices`, `credit_notes`, `invoice_series`                                                          |
 | Trial & wallet | `trial_claims`, `wallet_ledger`                                                                       |
 | Engagement     | `reviews`, `review_media`, `leads`, `notifications`                                                   |
-| Platform       | `admin_users`, `roles`, `audit_log`, `webhook_events`, `settings`                                     |
+| Platform       | `admin_users` (role is an enum), `admin_sessions`, `audit_log`, `webhook_events`, `settings`          |
 
 Key fields:
 
@@ -240,6 +240,16 @@ Every transition writes a row to `order_events` (or the equivalent events table)
 | `GET /v1/config`                                                                                | Banners, countdown end dates, min app version, fees                                                                              |
 | `DELETE /v1/me`                                                                                 | Delete account                                                                                                                   |
 
+### Admin endpoints
+
+All under `/v1/admin`, admin access token required (never a customer token), roles checked per controller (`@AdminController(path, roles)`); every change writes `audit_log`.
+
+| Method & path                                                                                              | Purpose                                                                                                     |
+| ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `POST /v1/admin/auth/login` · `POST /v1/admin/auth/totp` · `POST /v1/admin/auth/refresh` · `POST …/logout` | Sign-in: email + password, then the authenticator code (first sign-in sets the app up); refresh cookie only |
+| `GET /v1/admin/me` · `POST /v1/admin/me/password`                                                          | Own profile; change password (current password + code; signs out other sessions)                            |
+| `GET /v1/admin/audit-log`                                                                                  | Audit log, newest first, filterable by admin, entity and action (owner only)                                |
+
 ### Webhooks received
 
 | Path                           | Events                                                   |
@@ -313,7 +323,9 @@ DATABASE_URL=
 REDIS_URL=
 JWT_ACCESS_SECRET=
 JWT_REFRESH_SECRET=          # HMAC key for stored refresh-token hashes
-OTP_SECRET=                  # HMAC key for stored OTP hashes (all three secrets must differ)
+OTP_SECRET=                  # HMAC key for stored OTP hashes (all four secrets must differ)
+ADMIN_JWT_SECRET=            # admin access/sign-in tokens and refresh-token HMACs (keys derived per purpose)
+ADMIN_TOTP_KEY=              # 32 random bytes, base64 (openssl rand -base64 32): encrypts admins' authenticator keys
 OTP_PROVIDER=                # "console" (dev only) until the SMS/WhatsApp provider is chosen
 TRUST_PROXY=                 # number of proxies in front of the API; decides client IP for rate limits
 RAZORPAY_KEY_ID=
@@ -447,6 +459,13 @@ Record decisions here (or as ADRs in `docs/adr/`) so every AI tool and teammate 
 | 2026-11-20 | PDFs are rendered on request from the snapshot by a small built-in writer (standard Helvetica, "Rs." since the base fonts have no ₹); no PDF library, no S3 yet. Non-production PDFs are stamped SPECIMEN                                    | No new dependency; deterministic output. Swap in a library with embedded fonts if branded invoices are wanted                                     |
 | 2026-11-20 | Delivery address text must use English letters (Latin-1 plus common punctuation)                                                                                                                                                             | Invoices and courier labels are printed in English; the PDF fonts can't show Devanagari                                                           |
 | 2026-11-20 | pnpm override `effect@<3.22.1` → `^3.22.1`                                                                                                                                                                                                   | High-severity ReDoS advisory in a Prisma CLI dependency; patch-level bump keeps CI's audit green until Prisma updates                             |
+| 2026-11-21 | Admin sign-in: email + password (scrypt, built into Node), then a 6-digit code from an authenticator app (TOTP, RFC 6238, built on node:crypto); the first sign-in sets the app up. Keys stored AES-256-GCM encrypted (`ADMIN_TOTP_KEY`)     | Owner's choice; no SMS cost or dependency; codes can't be reused (last step stored)                                                               |
+| 2026-11-21 | Five failed passwords or codes in a row lock an admin for 15 minutes; only someone with the right password is told it's locked. Wrong email and wrong password look the same                                                                 | Stops guessing without letting strangers lock out or enumerate staff                                                                              |
+| 2026-11-21 | Admin tokens use keys derived from a separate `ADMIN_JWT_SECRET`; refresh token only in an httpOnly `SameSite=Strict` cookie scoped to `/v1/admin/auth`; sessions last 12 hours and refreshing never extends them                            | A customer token can never act as an admin one; the admin panel is web-only                                                                       |
+| 2026-11-21 | `AdminGuard` checks the admin, session and role against the database on every request; `/v1/admin` routes without `@AdminController(path, roles)` are refused                                                                                | Sign-out, disabling and role changes apply at once; deny by default                                                                               |
+| 2026-11-21 | Roles are a fixed enum (`owner`, `operations`, `support`) with permissions in code, instead of a `roles` table                                                                                                                               | Three fixed roles; a table adds nothing until custom roles are needed                                                                             |
+| 2026-11-21 | `audit_log` is append-only (trigger); `AuditService.record` runs in the change's transaction; an interceptor fails any admin change that wrote no audit record (logged only in production)                                                   | CLAUDE.md §8 "every action in audit_log", enforced rather than remembered                                                                         |
+| 2026-11-21 | No 2FA recovery codes; a lost phone or lockout is fixed by an owner with the command line (`admin reset-2fa` / `unlock` / `reset-password`), which is audited                                                                                | Small team; fewer secrets to manage. Owner screens for this come in slice 8                                                                       |
 
 ---
 

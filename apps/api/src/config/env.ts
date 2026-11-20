@@ -24,6 +24,15 @@ export const envSchema = z
     JWT_REFRESH_SECRET: secret('JWT_REFRESH_SECRET'),
     /** HMAC key for stored OTP hashes. */
     OTP_SECRET: secret('OTP_SECRET'),
+    /** Signs admin access and sign-in challenge tokens; HMAC key for admin refresh tokens. */
+    ADMIN_JWT_SECRET: secret('ADMIN_JWT_SECRET'),
+    /** Encrypts admins' authenticator keys (AES-256-GCM): 32 random bytes, base64. */
+    ADMIN_TOTP_KEY: z
+      .string()
+      .refine(
+        (v) => /^[A-Za-z0-9+/]+={0,2}$/.test(v) && Buffer.from(v, 'base64').length === 32,
+        'must be 32 random bytes, base64-encoded (openssl rand -base64 32)',
+      ),
     /** Only "console" exists until the SMS/WhatsApp provider is chosen (CLAUDE.md §11). */
     OTP_PROVIDER: z.enum(['console']).default('console'),
     /** Public base URL for product media (S3 + CDN). Until the CDN exists, paths stay relative. */
@@ -150,12 +159,18 @@ export const envSchema = z
         message: 'must match the first two digits of SELLER_GSTIN',
       });
     }
-    const secrets = [env.JWT_ACCESS_SECRET, env.JWT_REFRESH_SECRET, env.OTP_SECRET];
+    const secrets = [
+      env.JWT_ACCESS_SECRET,
+      env.JWT_REFRESH_SECRET,
+      env.OTP_SECRET,
+      env.ADMIN_JWT_SECRET,
+    ];
     if (new Set(secrets).size !== secrets.length) {
       ctx.addIssue({
         code: 'custom',
         path: ['JWT_ACCESS_SECRET'],
-        message: 'JWT_ACCESS_SECRET, JWT_REFRESH_SECRET and OTP_SECRET must all be different',
+        message:
+          'JWT_ACCESS_SECRET, JWT_REFRESH_SECRET, OTP_SECRET and ADMIN_JWT_SECRET must all be different',
       });
     }
   });

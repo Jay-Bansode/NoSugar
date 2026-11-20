@@ -38,6 +38,12 @@ export const ErrorCode = {
   WEBHOOK_SIGNATURE_INVALID: 'WEBHOOK_SIGNATURE_INVALID',
   /** The order has no invoice (yet): it is issued shortly after confirmation. */
   INVOICE_NOT_AVAILABLE: 'INVOICE_NOT_AVAILABLE',
+  /** Admin sign-in: wrong email or password (never says which). */
+  INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
+  /** Admin sign-in: too many failed attempts; try again after `retryAfterSeconds`. */
+  ACCOUNT_LOCKED: 'ACCOUNT_LOCKED',
+  /** Admin sign-in: wrong, expired or already-used authenticator code. */
+  TOTP_INVALID: 'TOTP_INVALID',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

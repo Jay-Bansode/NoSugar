@@ -57,6 +57,21 @@ describe('loadEnv', () => {
     expect(message).not.toContain('short-secret');
   });
 
+  it('requires the admin secrets, a 32-byte TOTP key, and no reuse of customer secrets', () => {
+    const missing = errorFrom(() =>
+      loadEnv({ ...valid, ADMIN_JWT_SECRET: undefined, ADMIN_TOTP_KEY: undefined }),
+    ).message;
+    expect(missing).toContain('ADMIN_JWT_SECRET');
+    expect(missing).toContain('ADMIN_TOTP_KEY');
+    const short = errorFrom(() =>
+      loadEnv({ ...valid, ADMIN_TOTP_KEY: Buffer.alloc(16).toString('base64') }),
+    ).message;
+    expect(short).toContain('ADMIN_TOTP_KEY: must be 32 random bytes');
+    expect(
+      errorFrom(() => loadEnv({ ...valid, ADMIN_JWT_SECRET: valid.JWT_ACCESS_SECRET })).message,
+    ).toContain('must all be different');
+  });
+
   it('rejects reused secrets', () => {
     const { message } = errorFrom(() => loadEnv({ ...valid, OTP_SECRET: valid.JWT_ACCESS_SECRET }));
     expect(message).toContain('must all be different');
