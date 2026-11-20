@@ -43,7 +43,7 @@ jobs:
       # Only the db steps use this; unit/e2e tests never touch the database.
       CI_DATABASE_URL: postgresql://brand:brand@localhost:5432/brand?schema=public
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v4
 
