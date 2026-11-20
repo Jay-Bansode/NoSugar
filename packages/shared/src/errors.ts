@@ -44,6 +44,8 @@ export const ErrorCode = {
   ACCOUNT_LOCKED: 'ACCOUNT_LOCKED',
   /** Admin sign-in: wrong, expired or already-used authenticator code. */
   TOTP_INVALID: 'TOTP_INVALID',
+  /** The refund breaks a rule (status, amount over what's refundable, method). */
+  REFUND_NOT_ALLOWED: 'REFUND_NOT_ALLOWED',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

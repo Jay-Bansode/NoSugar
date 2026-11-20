@@ -244,7 +244,15 @@ export class PaymentsService implements OnModuleInit {
       where: { id: refundId },
       include: { payment: true },
     });
-    if (!refund || refund.razorpayRefundId || refund.status !== 'pending') return;
+    // Manual refunds (COD) are paid outside the system and recorded as processed.
+    if (
+      !refund ||
+      refund.method !== 'razorpay' ||
+      refund.razorpayRefundId ||
+      refund.status !== 'pending'
+    ) {
+      return;
+    }
     if (!refund.payment?.razorpayPaymentId) {
       throw new Error(`Refund ${refundId} has no captured Razorpay payment`);
     }

@@ -57,6 +57,14 @@ export class AuditService {
     });
     actor.audited = true;
   }
+
+  /**
+   * Declares that this admin request changed nothing (e.g. an idempotent replay), so there is
+   * nothing to record. Must be explicit: the interceptor treats silence as a bug.
+   */
+  noChange(actor: AuditActor): void {
+    actor.audited = true;
+  }
 }
 
 const READ_ONLY = new Set(['GET', 'HEAD', 'OPTIONS']);

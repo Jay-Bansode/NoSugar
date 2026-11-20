@@ -179,6 +179,21 @@ describe('createAdminApi', () => {
     ]);
   });
 
+  it('sends refunds with their Idempotency-Key and encodes order numbers', async () => {
+    const { fetch, calls } = fakeFetch(apiError(409, 'REFUND_NOT_ALLOWED', 'Too much'));
+    const api = createAdminApi({ baseUrl: 'http://api.test', fetch, getAccessToken: () => 't' });
+    await expect(
+      api.orders.refund(
+        'BR1000001',
+        { amountPaise: 100, reason: 'Damaged', method: 'razorpay' },
+        'key-123456789',
+      ),
+    ).rejects.toMatchObject({ code: 'REFUND_NOT_ALLOWED', status: 409 });
+    expect(calls[0]!.url).toBe('http://api.test/v1/admin/orders/BR1000001/refunds');
+    expect(headersOf(calls[0]!).get('Idempotency-Key')).toBe('key-123456789');
+    expect(JSON.parse(String(calls[0]!.init.body))).toMatchObject({ amountPaise: 100 });
+  });
+
   it('pages through the audit log', async () => {
     const { fetch, calls } = fakeFetch(
       json({

@@ -6,10 +6,17 @@ import {
   adminLoginChallengeSchema,
   type AdminMe,
   adminMeSchema,
+  type AdminOrderDetail,
+  adminOrderDetailSchema,
+  type AdminOrderListQuery,
+  type AdminOrderSummary,
+  adminOrderSummarySchema,
+  type AdminRefund,
   type AdminTokens,
   adminTokensSchema,
   type AuditLogEntry,
   auditLogEntrySchema,
+  IDEMPOTENCY_KEY_HEADER,
   type Paginated,
   paginated,
 } from '@brand/shared';
@@ -25,6 +32,11 @@ export interface AuditLogQuery {
 }
 
 const auditLogPage = paginated(auditLogEntrySchema);
+const orderPage = paginated(adminOrderSummarySchema);
+
+export type AdminOrderQuery = Partial<Omit<AdminOrderListQuery, 'limit'>> & { limit?: number };
+
+const orderPath = (number: string) => `/admin/orders/${encodeURIComponent(number)}`;
 
 /**
  * The admin panel's API: sign-in and the /v1/admin endpoints. Sends cookies (the refresh
@@ -62,6 +74,34 @@ export function createAdminApi(options: Omit<ApiClientOptions, 'credentials'>) {
       client.request('POST', '/admin/me/password', { body: input }),
     auditLog: (query: AuditLogQuery = {}): Promise<Paginated<AuditLogEntry>> =>
       client.request('GET', '/admin/audit-log', { query: { ...query }, schema: auditLogPage }),
+    orders: {
+      list: (query: AdminOrderQuery = {}): Promise<Paginated<AdminOrderSummary>> =>
+        client.request('GET', '/admin/orders', { query: { ...query }, schema: orderPage }),
+      get: (number: string): Promise<AdminOrderDetail> =>
+        client.request('GET', orderPath(number), { schema: adminOrderDetailSchema }),
+      pack: (number: string): Promise<AdminOrderDetail> =>
+        client.request('POST', `${orderPath(number)}/pack`, { schema: adminOrderDetailSchema }),
+      cancel: (number: string, reason: string): Promise<AdminOrderDetail> =>
+        client.request('POST', `${orderPath(number)}/cancel`, {
+          body: { reason },
+          schema: adminOrderDetailSchema,
+        }),
+      /** Pass the same key when retrying, so the refund is never made twice. */
+      refund: (
+        number: string,
+        input: AdminRefund,
+        idempotencyKey: string,
+      ): Promise<AdminOrderDetail> =>
+        client.request('POST', `${orderPath(number)}/refunds`, {
+          body: input,
+          headers: { [IDEMPOTENCY_KEY_HEADER]: idempotencyKey },
+          schema: adminOrderDetailSchema,
+        }),
+      invoicePdf: (number: string): Promise<Blob> =>
+        client.download(`${orderPath(number)}/invoice`),
+      creditNotePdf: (number: string, creditNoteId: string): Promise<Blob> =>
+        client.download(`${orderPath(number)}/credit-notes/${encodeURIComponent(creditNoteId)}`),
+    },
   };
 }
 

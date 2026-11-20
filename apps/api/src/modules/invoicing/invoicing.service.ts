@@ -8,6 +8,7 @@ import {
   documentNumber,
   financialYear,
   INVOICE_PREFIX,
+  remainingLines,
   type OrderStatus,
   type Paise,
   shippingAddressSchema,
@@ -263,6 +264,19 @@ export class InvoicingService implements OnModuleInit {
     });
     this.logger.log(`Credit note ${number} issued (orderId=${orderId}, creditNoteId=${note.id})`);
     return { id: note.id, number };
+  }
+
+  /** Value on the order's invoice not yet reversed by credit notes; null when not invoiced. */
+  async uncreditedPaise(tx: Tx, orderId: string): Promise<Paise | null> {
+    const invoice = await tx.invoice.findUnique({
+      where: { orderId },
+      include: { creditNotes: true },
+    });
+    if (!invoice) return null;
+    return remainingLines(
+      asLines(invoice.lines),
+      invoice.creditNotes.map((c) => asCreditLines(c.lines)),
+    ).reduce((sum, line) => sum + line.totalPaise, 0);
   }
 
   async invoicePdf(orderId: string): Promise<PdfFile | null> {

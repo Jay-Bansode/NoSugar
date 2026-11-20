@@ -60,6 +60,14 @@ enum RefundStatus {
   @@map("refund_status")
 }
 
+/// How the money goes back: through Razorpay, or paid outside the system (COD) by bank/UPI.
+enum RefundMethod {
+  razorpay
+  manual
+
+  @@map("refund_method")
+}
+
 enum ProductType {
   coffee
   trial_kit
@@ -521,6 +529,11 @@ model Refund {
   razorpayRefundId String?      @unique @map("razorpay_refund_id")
   amountPaise      Int          @map("amount_paise")
   status           RefundStatus @default(pending)
+  method           RefundMethod @default(razorpay)
+  /// Bank/UPI transaction reference (UTR) for a manual refund.
+  reference        String?
+  /// Admin refunds: the request's Idempotency-Key, so a repeated click can't refund twice.
+  idempotencyKey   String?      @map("idempotency_key")
   reason           String
   createdBy        String       @map("created_by")
   processedAt      DateTime?    @map("processed_at") @db.Timestamptz(3)
@@ -531,6 +544,7 @@ model Refund {
   payment    Payment?    @relation(fields: [paymentId], references: [id], onDelete: Restrict)
   creditNote CreditNote?
 
+  @@unique([orderId, idempotencyKey])
   @@index([orderId])
   @@map("refunds")
 }

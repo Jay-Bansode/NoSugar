@@ -13,5 +13,7 @@ export default defineConfig({
     include: ['test/**/*.db-spec.ts'],
     environment: 'node',
     fileParallelism: false,
+    // Integration tests place orders and wait for background jobs (invoices, refunds).
+    testTimeout: 20_000,
   },
 });

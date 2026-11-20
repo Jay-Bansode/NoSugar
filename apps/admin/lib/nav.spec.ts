@@ -5,7 +5,7 @@ describe('navFor', () => {
   it('shows the audit log to owners only', () => {
     expect(navFor('owner').map((i) => i.href)).toContain('/audit-log');
     expect(navFor('operations').map((i) => i.href)).not.toContain('/audit-log');
-    expect(navFor('support').map((i) => i.href)).toEqual(['/', '/account']);
+    expect(navFor('support').map((i) => i.href)).toEqual(['/', '/orders', '/account']);
   });
 });
 
